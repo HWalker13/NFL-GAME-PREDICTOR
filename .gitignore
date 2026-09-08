@@ -1,0 +1,17 @@
+# Python virtual environment (SPEC Section 11 — not committed)
+venv/
+
+# Large / generated data and model artifacts — regenerated locally, never in git.
+# Ignore the contents but keep the empty directory structure via .gitkeep.
+data/raw/*
+data/processed/*
+models/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store

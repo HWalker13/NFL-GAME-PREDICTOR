@@ -1,0 +1,17 @@
+# Phase 1 dependencies — the package list from SPEC.md Section 10.
+# All free / open-source, no API keys or paid tiers (SPEC Section 3.2).
+#
+# Requires Python 3.11.x. nfl_data_py 0.3.3 (latest) pins numpy<2.0 and
+# pandas<2.0, which have no prebuilt wheels for Python 3.12+, so the venv
+# is built on Python 3.11.13. See the setup notes reported to the user.
+#
+# Versions pinned to what was resolved and installed on 2026-09-08.
+
+pandas==1.5.3
+numpy==1.26.4          # transitive, but pinned: nfl_data_py requires numpy<2.0
+scikit-learn==1.9.0
+nfl_data_py==0.3.3
+jupyter==1.1.1
+matplotlib==3.11.1
+seaborn==0.13.2
+joblib==1.6.0
