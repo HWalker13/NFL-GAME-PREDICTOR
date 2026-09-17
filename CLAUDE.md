@@ -14,3 +14,23 @@
   it as a good result (Section 5.6/5.7).
 - When reporting results, show actual command output (file listings, git log,
   git status, computed numbers) rather than only narrating what happened.
+- Decision record: the SPEC 7.2 EWM recency-weighted features (`{m}_ewm`,
+  Pattern C) are grouped by team only, with no hard reset at season
+  boundaries — recency decay (halflife=5 games) is deliberately left to
+  handle the season transition on its own instead of a `[team, season]`
+  reset like the `_sd`/`_shrunk` features use, so this is a recorded design
+  choice, not a bug to "fix" later.
+
+## Deferred / future work (tracked, not re-derived from scratch each time)
+
+- Starting-QB-change flag (SPEC Section 9, item 3) — a backup QB starting is
+  a bigger performance swing than rolling EPA averages capture; deferred to
+  a later phase once the core win/loss MVP works.
+- Per-team home-field-advantage Elo adjustment — considered, deferred.
+  Current `ELO_HOME_ADV` is a single global constant derived from train-only
+  home win rate. A per-team version would need its own shrunk,
+  point-in-time-correct feature (same rigor as Elo/EWM), since raw per-team
+  home splits are too small-sample to use directly and a naive full-history
+  average would leak future games into early-season ratings. Revisit only if
+  Phase 5B's feature-importance check suggests home-field signal is being
+  left on the table.

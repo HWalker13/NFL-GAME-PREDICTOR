@@ -18,13 +18,24 @@ Pipeline
 
 Leakage discipline (SPEC 5.4, enforced by CLAUDE.md)
 ---------------------------------------------------
-EVERY rolling/aggregated feature uses one of exactly two patterns:
+EVERY rolling/aggregated/recency feature uses one of the following patterns:
 
 * **Pattern A** -- ``.rolling(window=..., closed='left')`` (the ``closed='left'``
   argument is what excludes the current row from its own window).
 * **Pattern B** -- ``pd.merge_asof(..., direction='backward',
   allow_exact_matches=False)`` on the ``season`` axis, so a row can only ever be
   matched to a strictly-earlier season.
+* **Pattern C** (SPEC 7.2, Phase 5 Part A) -- EWM recency weighting. ``.ewm()``
+  has no ``closed='left'`` argument, so the current-row exclusion is done by
+  ``.shift(1)`` BEFORE ``.ewm(...).mean()`` is ever called -- never call
+  ``.ewm()`` on the unshifted series. Produces the ``{metric}_ewm`` columns.
+* **Pattern D** (SPEC 7.2, Phase 5 Part A) -- Elo rating. A single chronological
+  pass over all games, sorted by kickoff, updating a running per-team rating
+  dict after each game. The pre-game snapshot (``home_elo_pre``/``away_elo_pre``)
+  is read from the dict *before* that game's own result is applied to it. This
+  doesn't fit the rolling-window/merge_asof shape of A/B/C, so it's verified by
+  its own dedicated test, ``leakage_checks.check_elo_point_in_time``, rather
+  than the closed='left' argument or a merge_asof guard.
 
 Plain ``.expanding().mean()`` / ``.rolling().mean()`` without ``closed='left'``
 does not appear anywhere in this module. ``feature_manifest.json`` records the
@@ -59,6 +70,41 @@ DEFAULT_K = 4
 IN_SEASON_WINDOW = 22
 DEFAULT_START = 2002
 DEFAULT_END = 2025
+
+# SPEC Section 7.2 (Pattern C): recency-weighted EWM alternative to the flat
+# in-season rolling mean. halflife=5 games means a team's last ~5 games carry
+# about half the total weight, decaying smoothly further back -- short enough
+# to reflect "hot/cold" recent form (the SPEC 7.2 motivation for trying EWM
+# against a flat rolling mean) while still longer than a single noisy game.
+# Grouped by TEAM ONLY (not team+season, unlike the *_sd/_shrunk in-season
+# window): recency weighting itself supplies the cross-season decay, so an
+# offseason gap is treated as one more step in the sequence rather than a hard
+# reset to zero information -- consistent with how the Elo rating below is
+# also carried across seasons without resetting.
+EWM_HALFLIFE = 5.0
+
+# SPEC Section 7.2: standalone Elo rating. K-factor and starting rating are
+# exactly the two "tunable constants" the spec calls for. The margin-of-victory
+# multiplier is the standard 538-style form:
+#   mov_mult = ln(|margin| + 1) * (ELO_MOV_DENOM / (ELO_MOV_SCALE * elo_diff + ELO_MOV_DENOM))
+# where elo_diff = winner's pre-game rating - loser's pre-game rating. This
+# dampens the multiplier when the higher-rated team wins by a lot (already
+# expected) and amplifies it when a lower-rated team blows out a favorite.
+ELO_K = 20.0
+ELO_START_RATING = 1500.0
+ELO_MOV_DENOM = 2.2
+ELO_MOV_SCALE = 0.001
+
+# Home-field advantage, expressed as an Elo point offset applied ONLY inside
+# the expected-score calculation (never added to home_elo_pre/away_elo_pre/
+# elo_diff themselves, which stay home-field-neutral team-strength ratings).
+# NOT a literature constant -- derived from this project's own TRAIN split
+# (season <= 2021 only, via train_winner.load_train_val_frame()'s existing
+# 2023-2024 guard, then further restricted to <= TRAIN_MAX_SEASON so 2022
+# validation is untouched too): train-only home win rate p = 2890/5124 =
+# 0.5640124902419984, converted to an Elo point gap via the standard log-odds
+# relationship ELO_HOME_ADV = 400 * log10(p / (1 - p)) = 44.72586959078301.
+ELO_HOME_ADV = 44.72586959078301
 
 # Schedules use era team codes (STL/SD/OAK); pbp already uses the modern codes.
 # Join is on game_id, but where we read a team code straight off the schedule we
@@ -259,6 +305,73 @@ def roll_left(df: pd.DataFrame, col: str, window: int, by: list[str],
     return rolled.reindex(df.index)
 
 
+def roll_ewm(df: pd.DataFrame, col: str, by: list[str], halflife: float) -> pd.Series:
+    """Pattern C. Exponentially-weighted mean over PRIOR rows only.
+
+    ``.ewm()`` has no ``closed='left'`` argument, so the current-row exclusion
+    is done by ``.shift(1)`` BEFORE ``.ewm(...).mean()`` is called -- shifting
+    first means the row's own value is never a term in its own (or any later
+    row's) weighted average. ``df`` must already be sorted so each group's
+    rows are in ascending time order (SPEC 5.4 discipline applied to EWM).
+    """
+    grp = df.groupby(by, sort=False)[col]
+    return grp.transform(lambda s: s.shift(1).ewm(halflife=halflife, min_periods=1).mean())
+
+
+def build_elo_table(schedules: pd.DataFrame, start_season: int, end_season: int,
+                    k: float = ELO_K, start_rating: float = ELO_START_RATING) -> pd.DataFrame:
+    """Pattern D. Standalone Elo rating (SPEC 7.2) via a single chronological
+    pass over every completed REG game in ``[start_season, end_season]``,
+    sorted by kickoff.
+
+    Returns one row per ``game_id`` with ``home_elo_pre`` / ``away_elo_pre`` --
+    each team's rating STRICTLY BEFORE this game. The pre-game snapshot is
+    taken from the running ``ratings`` dict *before* that same game's result
+    is folded into it, which is the critical point-in-time requirement (verified
+    independently by ``leakage_checks.check_elo_point_in_time``).
+    """
+    idx = build_game_index(schedules)
+    idx = idx[idx["season"].between(start_season, end_season)]
+    reg = evaluate.completed_regular_season(schedules)[
+        ["game_id", "home_team", "away_team", "home_score", "away_score"]
+    ].copy()
+    reg["home_team"] = _canon(reg["home_team"])
+    reg["away_team"] = _canon(reg["away_team"])
+    reg = idx[["game_id", "kickoff"]].merge(reg, on="game_id", how="inner")
+    reg = reg.sort_values(["kickoff", "game_id"]).reset_index(drop=True)
+
+    ratings: dict[str, float] = {}
+    home_pre = np.empty(len(reg), dtype="float64")
+    away_pre = np.empty(len(reg), dtype="float64")
+
+    for i, (h, a, hs, asc) in enumerate(
+        zip(reg["home_team"], reg["away_team"], reg["home_score"], reg["away_score"])
+    ):
+        rh = ratings.get(h, start_rating)
+        ra = ratings.get(a, start_rating)
+        home_pre[i] = rh
+        away_pre[i] = ra
+
+        margin = hs - asc  # ties already dropped by completed_regular_season
+        actual_home = 1.0 if margin > 0 else 0.0
+        # ELO_HOME_ADV enters ONLY here (expected score), never into rh/ra
+        # themselves -- home_elo_pre/away_elo_pre/elo_diff stay the teams'
+        # true, home-field-neutral ratings.
+        expected_home = 1.0 / (1.0 + 10 ** ((ra - (rh + ELO_HOME_ADV)) / 400.0))
+        winner_elo, loser_elo = (rh, ra) if margin > 0 else (ra, rh)
+        mov_mult = np.log(abs(margin) + 1) * (
+            ELO_MOV_DENOM / (ELO_MOV_SCALE * (winner_elo - loser_elo) + ELO_MOV_DENOM)
+        )
+        delta = k * mov_mult * (actual_home - expected_home)
+        ratings[h] = rh + delta
+        ratings[a] = ra - delta
+
+    out = reg[["game_id"]].copy()
+    out["home_elo_pre"] = home_pre
+    out["away_elo_pre"] = away_pre
+    return out
+
+
 def prior_season_mean(tgl: pd.DataFrame, metric: str) -> pd.DataFrame:
     """Pattern B. Each (team, season) -> that TEAM's mean of ``metric`` over its
     most recent strictly-earlier season (``merge_asof`` on the season axis,
@@ -341,6 +454,7 @@ def roll_features(tgl: pd.DataFrame, k: int = DEFAULT_K) -> pd.DataFrame:
       {m}_prior   Pattern B  merge_asof(on='season', by='team', allow_exact_matches=False)
       {m}_league  Pattern B  merge_asof(on='season', allow_exact_matches=False)
       {m}_shrunk  A + B      shrink({m}_sd_n, {m}_sd, {m}_prior, {m}_league, k)
+      {m}_ewm     Pattern C  shift(1).ewm(halflife=EWM_HALFLIFE).mean()  by [team]
     plus one shared:
       games_played_sd  Pattern A  rolling(window=22, closed='left').count() of game rows
     """
@@ -372,6 +486,10 @@ def roll_features(tgl: pd.DataFrame, k: int = DEFAULT_K) -> pd.DataFrame:
         # kept only for the leakage-check tripwire / manifest, not for the model:
         keep[f"{m}_sd"] = sd.to_numpy()
         keep[f"{m}_sd_n"] = sd_n.to_numpy()
+
+        # Pattern C (SPEC 7.2): recency-weighted alternative to the flat
+        # in-season mean, grouped by team only -- see EWM_HALFLIFE comment.
+        keep[f"{m}_ewm"] = roll_ewm(df, m, ["team"], EWM_HALFLIFE).to_numpy()
 
     return keep
 
@@ -516,6 +634,10 @@ DIFF_FEATURES = {
 }
 
 MODEL_SHRUNK = [f"{m}_shrunk" for m in RAW_METRICS]
+MODEL_EWM = [f"{m}_ewm" for m in RAW_METRICS]
+
+# SPEC 7.2 Elo feature (Pattern D).
+ELO_FEATURES = ["home_elo_pre", "away_elo_pre", "elo_diff"]
 
 
 # --------------------------------------------------------------------------- #
@@ -540,16 +662,21 @@ def build_game_features(start_season: int = DEFAULT_START,
 
     rolled = roll_features(tgl, k=k)
 
-    model_cols = ["game_id", "season", "week", "kickoff", "games_played_sd"] + MODEL_SHRUNK
+    model_cols = (["game_id", "season", "week", "kickoff", "games_played_sd"]
+                  + MODEL_SHRUNK + MODEL_EWM)
     home = (rolled[rolled["is_home"]][["game_id"] + [c for c in model_cols if c != "game_id"]]
             .add_prefix("home_").rename(columns={"home_game_id": "game_id"}))
-    away = (rolled[~rolled["is_home"]][["game_id"] + MODEL_SHRUNK + ["games_played_sd"]]
+    away = (rolled[~rolled["is_home"]][["game_id"] + MODEL_SHRUNK + MODEL_EWM + ["games_played_sd"]]
             .add_prefix("away_").rename(columns={"away_game_id": "game_id"}))
     frame = home.merge(away, on="game_id", how="inner")
     frame = frame.drop(columns=["home_season", "home_week", "home_kickoff"])
 
     ctx = contextual_features(game_index, STADIUM_GEO, team_home_stadium(schedules))
     frame = frame.merge(ctx, on="game_id", how="inner")
+
+    elo = build_elo_table(schedules, start_season, end_season)
+    frame = frame.merge(elo, on="game_id", how="inner")
+    frame["elo_diff"] = frame["home_elo_pre"] - frame["away_elo_pre"]
 
     frame = frame.merge(
         game_index[["game_id", "season", "week", "kickoff", "home_win"]],
@@ -579,9 +706,11 @@ def feature_columns() -> list[str]:
     cols = []
     for side in ("home", "away"):
         cols += [f"{side}_{m}_shrunk" for m in RAW_METRICS]
+        cols += [f"{side}_{m}_ewm" for m in RAW_METRICS]
         cols.append(f"{side}_games_played_sd")
     cols += list(DIFF_FEATURES)
     cols += CONTEXT_FEATURES
+    cols += ELO_FEATURES
     return cols
 
 
@@ -612,12 +741,39 @@ def _write_manifest(k: int) -> None:
             "leakage_category": ["3"],
             "leakage_note": "current game excluded by closed='left'",
         }
+
+    C = f"groupby('team').transform(lambda s: s.shift(1).ewm(halflife={EWM_HALFLIFE}, min_periods=1).mean())"
+    for side in ("home", "away"):
+        for m in RAW_METRICS:
+            features[f"{side}_{m}_ewm"] = {
+                "pattern": "C",
+                "source_metric": m,
+                "call": C,
+                "by": ["team"],
+                "leakage_category": ["3", "2"],
+                "leakage_note": ("current game excluded by shift(1) BEFORE .ewm() is called "
+                                 "-- .ewm() itself has no closed='left' equivalent"),
+            }
+
     for name, (a, b) in DIFF_FEATURES.items():
         features[name] = {"pattern": "A+B (derived diff)", "formula": f"{a} - {b}",
                           "leakage_note": "inherits the two *_shrunk parents"}
     for c in CONTEXT_FEATURES:
         features[c] = {"pattern": "context",
                        "leakage_note": "schedule fact / static geo, fixed before kickoff (SPEC 5.3 allowed)"}
+
+    for name in ("home_elo_pre", "away_elo_pre"):
+        features[name] = {
+            "pattern": "D",
+            "call": ("single chronological pass over all games sorted by kickoff; "
+                     "pre-game rating snapshot taken BEFORE that game's own result "
+                     "is folded into the running per-team rating"),
+            "k": ELO_K, "start_rating": ELO_START_RATING,
+            "leakage_category": ["2"],
+            "leakage_note": "verified by leakage_checks.check_elo_point_in_time (Elo-specific point-in-time oracle)",
+        }
+    features["elo_diff"] = {"pattern": "D (derived diff)", "formula": "home_elo_pre - away_elo_pre",
+                            "leakage_note": "inherits the two elo_pre parents"}
 
     manifest = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),

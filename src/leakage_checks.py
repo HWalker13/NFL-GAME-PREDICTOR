@@ -24,6 +24,16 @@ Implements all four SPEC 5.5 checks:
 Checks 3-4 use ``src.train_winner``'s train (<=2021) / validation (2022)
 split and never touch the 2023-2024 test seasons (SPEC Section 6/8).
 
+``check_elo_point_in_time`` -- SPEC 7.2 Phase 5 Part A addition, the
+Elo-specific equivalent of check 1's timestamp assertion: independently
+recomputes, from raw final scores and each row's OWN stored elo_pre values,
+what a team's rating should be immediately after its PRIOR game (a standalone
+reimplementation of the Elo update math, not a call into
+``features.build_elo_table``, so a bug in one is not mirrored in the other),
+and asserts it matches ``home_elo_pre``/``away_elo_pre`` exactly. This is what
+verifies the pre-game-not-post-game requirement for the Elo feature (Pattern D
+in ``features.py``'s docstring).
+
 Run::
 
     python -m src.leakage_checks        # exit 0 = all clear, exit 1 = problem
@@ -211,6 +221,117 @@ def check_feature_timestamps(frame: pd.DataFrame, tgl: pd.DataFrame) -> dict:
         f"max(rolled vs current-game raw) corr = {result['max_rolled_vs_current_corr']} "
         f"({worst})"
     )
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# Elo-specific check -- point-in-time equivalent of the timestamp assertion
+# (SPEC 7.2 Phase 5 Part A, item 2)
+# --------------------------------------------------------------------------- #
+def check_elo_point_in_time(frame: pd.DataFrame, schedules: pd.DataFrame,
+                            k: float = F.ELO_K, seed: int = 0) -> dict:
+    """The critical Elo requirement is that ``home_elo_pre``/``away_elo_pre``
+    are each team's rating STRICTLY BEFORE that game -- never the post-game
+    rating. Verified independently of ``features.build_elo_table``'s internal
+    sequential dict (a different code path): for every team-game that has a
+    prior game, recompute what that team's rating should be immediately after
+    its PRIOR game -- using a standalone reimplementation of the Elo update
+    math applied to the prior game's own stored ``elo_pre`` values and its
+    actual final score -- and assert it matches THIS game's ``elo_pre`` for
+    that team exactly. Also checks every team's first game in range starts at
+    ``ELO_START_RATING``.
+
+    Raises ``AssertionError`` on any mismatch.
+    """
+    reg = evaluate.completed_regular_season(schedules)[
+        ["game_id", "home_team", "away_team", "home_score", "away_score"]
+    ].copy()
+    reg["home_team"] = F._canon(reg["home_team"])
+    reg["away_team"] = F._canon(reg["away_team"])
+
+    df = frame[["game_id", "kickoff", "home_elo_pre", "away_elo_pre"]].merge(
+        reg, on="game_id", how="inner"
+    )
+
+    long_parts = []
+    for side, opp in (("home", "away"), ("away", "home")):
+        long_parts.append(pd.DataFrame({
+            "game_id": df["game_id"],
+            "kickoff": df["kickoff"],
+            "team": df[f"{side}_team"],
+            "is_home": side == "home",
+            "elo_pre": df[f"{side}_elo_pre"],
+            "opp_elo_pre": df[f"{opp}_elo_pre"],
+            "team_score": df[f"{side}_score"],
+            "opp_score": df[f"{opp}_score"],
+        }))
+    long = pd.concat(long_parts, ignore_index=True)
+    long = long.sort_values(["team", "kickoff", "game_id"]).reset_index(drop=True)
+
+    # Standalone reimplementation of the Elo update (SPEC 7.2 / features.py
+    # Pattern D), written from scratch here rather than imported, so this
+    # oracle cannot silently share a bug with build_elo_table's sequential loop.
+    # ELO_HOME_ADV applies only to the home side's effective rating in the
+    # expected-score term (mirrors build_elo_table's expected_home exactly);
+    # elo_pre/opp_elo_pre themselves are never adjusted.
+    adv_own = np.where(long["is_home"], F.ELO_HOME_ADV, 0.0)
+    adv_opp = np.where(long["is_home"], 0.0, F.ELO_HOME_ADV)
+    margin = long["team_score"] - long["opp_score"]
+    actual = (margin > 0).astype("float64")
+    expected = 1.0 / (1.0 + 10 ** (
+        ((long["opp_elo_pre"] + adv_opp) - (long["elo_pre"] + adv_own)) / 400.0
+    ))
+    winner_elo = np.where(margin > 0, long["elo_pre"], long["opp_elo_pre"])
+    loser_elo = np.where(margin > 0, long["opp_elo_pre"], long["elo_pre"])
+    mov_mult = np.log(np.abs(margin) + 1) * (
+        F.ELO_MOV_DENOM / (F.ELO_MOV_SCALE * (winner_elo - loser_elo) + F.ELO_MOV_DENOM)
+    )
+    delta = k * mov_mult * (actual - expected)
+    long["post_elo"] = long["elo_pre"] + delta
+
+    long["prev_post_elo"] = long.groupby("team")["post_elo"].shift(1)
+    have_prev = long["prev_post_elo"].notna()
+
+    close = np.isclose(
+        long.loc[have_prev, "elo_pre"], long.loc[have_prev, "prev_post_elo"],
+        rtol=1e-9, atol=1e-6,
+    )
+    n_checked = int(have_prev.sum())
+    n_bad = int((~close).sum())
+
+    first = long.groupby("team", as_index=False).first()
+    first_bad = first.loc[~np.isclose(first["elo_pre"], F.ELO_START_RATING, atol=1e-9)]
+
+    if n_bad or len(first_bad):
+        bad_games = long.loc[have_prev][~close]["game_id"].tolist()[:10]
+        raise AssertionError(
+            f"Elo point-in-time check failed: {n_bad}/{n_checked} team-games have an "
+            f"elo_pre that does not match the recomputed post-game rating from their "
+            f"prior game (bad game_ids, first 10: {bad_games}); "
+            f"{len(first_bad)} team(s) did not start at ELO_START_RATING="
+            f"{F.ELO_START_RATING} on their first game in range"
+        )
+
+    rng = np.random.default_rng(seed)
+    sample_n = min(10, n_checked)
+    sample_idx = rng.choice(long.index[have_prev], size=sample_n, replace=False)
+    sample = long.loc[sample_idx, ["game_id", "team", "kickoff", "elo_pre", "prev_post_elo"]]
+
+    result = {
+        "n_team_games_checked": n_checked,
+        "n_mismatches": n_bad,
+        "n_teams_start_correct": int(len(first) - len(first_bad)),
+        "n_teams_total": int(len(first)),
+    }
+    print("\nCHECK (NEW)  Elo point-in-time test (SPEC 7.2, Phase 5 Part A item 2)")
+    print(f"  team-games checked (elo_pre vs. independently recomputed post-elo of "
+          f"the prior game): {n_checked:,}, mismatches: {n_bad}")
+    print(f"  teams starting at ELO_START_RATING={F.ELO_START_RATING} on their first "
+          f"game in range: {result['n_teams_start_correct']}/{result['n_teams_total']}")
+    print(f"  sample of {sample_n} checked team-games "
+          f"(elo_pre must equal prior game's recomputed post-elo):")
+    print(sample.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+    print("  VERDICT: PASS -- every home_elo_pre/away_elo_pre is strictly the pre-game rating")
     return result
 
 
@@ -432,6 +553,12 @@ def main() -> int:
         check_feature_timestamps(frame, tgl)
     except AssertionError as exc:
         print(f"CHECK 1  FAIL: {exc}")
+        ok = False
+
+    try:
+        check_elo_point_in_time(frame, schedules)
+    except AssertionError as exc:
+        print(f"CHECK (Elo)  FAIL: {exc}")
         ok = False
 
     # Checks 2-4 all share one guarded train(<=2021)/validation(2022) frame --
