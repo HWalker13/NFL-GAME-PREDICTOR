@@ -438,46 +438,66 @@ def label_shuffle_test(tv_frame: pd.DataFrame, schedules: pd.DataFrame,
 IMPORTANCE_FLAG_SHARE = 0.40
 
 
+def _lr_importance(pipe: Pipeline) -> np.ndarray:
+    """Default importance extractor: ``LogisticRegression`` coefficients (signed)."""
+    return pipe.named_steps["clf"].coef_[0]
+
+
 def feature_importance_inspection(pipe: Pipeline, feature_cols: list[str],
-                                   flag_share: float = IMPORTANCE_FLAG_SHARE) -> dict:
-    """SPEC 5.5 check 3: inspect the fitted ``LogisticRegression`` coefficient
-    magnitudes. Flags the top feature for manual re-verification against SPEC
-    5.4 if it accounts for more than ``flag_share`` of total |coefficient|
-    weight across all features.
+                                   importance_fn=None,
+                                   flag_share: float = IMPORTANCE_FLAG_SHARE,
+                                   model_label: str = "LogisticRegression") -> dict:
+    """SPEC 5.5 check 3, generalized to any fitted estimator.
+
+    ``importance_fn(pipe) -> np.ndarray`` extracts a per-feature importance
+    array from the fitted pipeline -- signed (``LogisticRegression.coef_``) or
+    unsigned (``RandomForestClassifier.feature_importances_``, or a
+    permutation-importance array for an estimator with neither, e.g.
+    ``HistGradientBoostingClassifier``). Defaults to the original
+    ``LogisticRegression`` coefficient extractor for backward compatibility.
+    Flags the top feature for manual re-verification against SPEC 5.4 if it
+    accounts for more than ``flag_share`` of total |importance| across all
+    features. ``model_label`` is cosmetic only (printed output / result dict)
+    so callers running this for multiple models (SPEC 7.1 Phase 5B) can tell
+    the printed blocks apart -- do NOT assume different models flag the same
+    top feature.
     """
-    coefs = pipe.named_steps["clf"].coef_[0]
-    abs_coefs = np.abs(coefs)
-    total = abs_coefs.sum()
-    shares = abs_coefs / total
+    fn = importance_fn if importance_fn is not None else _lr_importance
+    values = np.asarray(fn(pipe), dtype=float)
+    abs_values = np.abs(values)
+    total = abs_values.sum()
+    shares = abs_values / total
     order = np.argsort(-shares)
 
     top_i = order[0]
     top_feature = feature_cols[top_i]
     top_share = float(shares[top_i])
-    top_coef = float(coefs[top_i])
+    top_value = float(values[top_i])
     flagged = top_share > flag_share
 
     ranking = [
-        {"feature": feature_cols[i], "coef": float(coefs[i]), "share_of_abs_total": float(shares[i])}
+        {"feature": feature_cols[i], "value": float(values[i]), "share_of_abs_total": float(shares[i])}
         for i in order
     ]
 
     result = {
-        "top_feature": top_feature, "top_coef": top_coef, "top_share": top_share,
+        "model": model_label,
+        "top_feature": top_feature, "top_value": top_value, "top_share": top_share,
         "flag_share_threshold": flag_share, "flagged": flagged,
         "ranking": ranking,
     }
 
-    print("\nCHECK 3  feature-importance inspection (SPEC 5.5 #3)")
-    print("  top-5 by share of total |coef|:")
+    print(f"\nCHECK 3  feature-importance inspection (SPEC 5.5 #3) -- {model_label}")
+    print("  top-5 by share of total |importance|:")
     for r in ranking[:5]:
-        print(f"    {r['feature']:<34} coef={r['coef']:+.4f}  share={r['share_of_abs_total']:.3f}")
+        print(f"    {r['feature']:<34} value={r['value']:+.4f}  share={r['share_of_abs_total']:.3f}")
     if flagged:
-        print(f"  !! FLAGGED: '{top_feature}' accounts for {top_share:.1%} of total |coef| "
-              f"(> {flag_share:.0%}) -- manually verify its computation against SPEC 5.4 "
+        print(f"  !! FLAGGED [{model_label}]: '{top_feature}' accounts for {top_share:.1%} of total "
+              f"|importance| (> {flag_share:.0%}) -- manually verify its computation against SPEC 5.4 "
               "before trusting this model.")
     else:
-        print(f"  VERDICT: PASS -- no single feature dominates (top = '{top_feature}' at {top_share:.1%})")
+        print(f"  VERDICT [{model_label}]: PASS -- no single feature dominates "
+              f"(top = '{top_feature}' at {top_share:.1%})")
     return result
 
 
@@ -486,10 +506,17 @@ def feature_importance_inspection(pipe: Pipeline, feature_cols: list[str],
 # --------------------------------------------------------------------------- #
 def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
                    feature_cols: list[str], drop_feature: str,
-                   full_metrics: dict, baseline_accuracy: float) -> dict:
-    """SPEC 5.5 check 4: drop the single most important feature (from check 3),
-    retrain the identical pipeline on the same train split, re-evaluate on
-    validation.
+                   full_metrics: dict, baseline_accuracy: float,
+                   fit_and_eval_fn=None, model_label: str = "LogisticRegression") -> dict:
+    """SPEC 5.5 check 4, generalized to any fitted estimator: drop the single
+    most important feature (from that SAME model's own check 3 -- different
+    estimators are not assumed to flag the same top feature), retrain the
+    identical pipeline on the same train split, re-evaluate on validation.
+
+    ``fit_and_eval_fn(train_df, val_df, feature_cols) -> (pipe, metrics)``
+    lets callers swap in a different estimator/pipeline; defaults to
+    ``src.train_winner.fit_and_eval`` (the original ``LogisticRegression``
+    behavior) for backward compatibility. ``model_label`` is cosmetic only.
 
     Accuracy SHOULD degrade gracefully. Two patterns are explicitly flagged as
     suspicious, per SPEC 5.5 #4:
@@ -498,14 +525,16 @@ def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
           have been actively harmful (a leak interacting badly with something
           else)
     """
+    fit_fn = fit_and_eval_fn if fit_and_eval_fn is not None else TW.fit_and_eval
     remaining = [c for c in feature_cols if c != drop_feature]
-    _, metrics = TW.fit_and_eval(train_df, val_df, remaining)
+    _, metrics = fit_fn(train_df, val_df, remaining)
 
     delta_vs_full = metrics["accuracy"] - full_metrics["accuracy"]
     collapsed_to_baseline = metrics["accuracy"] <= baseline_accuracy + 0.01
     increased = delta_vs_full > 0
 
     result = {
+        "model": model_label,
         "dropped_feature": drop_feature,
         "full_accuracy": full_metrics["accuracy"],
         "ablated_accuracy": metrics["accuracy"],
@@ -519,7 +548,7 @@ def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
         "suspicious": collapsed_to_baseline or increased,
     }
 
-    print("\nCHECK 4  ablation sanity check (SPEC 5.5 #4)")
+    print(f"\nCHECK 4  ablation sanity check (SPEC 5.5 #4) -- {model_label}")
     print(f"  dropped feature: '{drop_feature}'")
     print(f"  full model     : accuracy={full_metrics['accuracy']:.4f}  "
           f"log_loss={full_metrics['log_loss']:.4f}  brier={full_metrics['brier_score']:.4f}  "
@@ -529,15 +558,15 @@ def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
           f"roc_auc={metrics['roc_auc']:.4f}")
     print(f"  delta (ablated - full): {delta_vs_full:+.4f}   home baseline: {baseline_accuracy:.4f}")
     if increased:
-        print(f"  !! FLAGGED: accuracy INCREASED after removing '{drop_feature}' -- "
+        print(f"  !! FLAGGED [{model_label}]: accuracy INCREASED after removing '{drop_feature}' -- "
               "SPEC 5.5 #4 red flag: this feature may be actively harmful (a leak "
               "interacting badly with something else).")
     if collapsed_to_baseline:
-        print(f"  !! FLAGGED: ablated accuracy ({metrics['accuracy']:.4f}) collapsed to "
+        print(f"  !! FLAGGED [{model_label}]: ablated accuracy ({metrics['accuracy']:.4f}) collapsed to "
               f"~baseline ({baseline_accuracy:.4f}) -- model may be overly reliant on "
               f"'{drop_feature}' alone.")
     if not result["suspicious"]:
-        print("  VERDICT: PASS -- accuracy degraded gracefully, no red flags.")
+        print(f"  VERDICT [{model_label}]: PASS -- accuracy degraded gracefully, no red flags.")
     return result
 
 
