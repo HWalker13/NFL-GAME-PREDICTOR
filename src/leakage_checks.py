@@ -571,6 +571,37 @@ def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
 
 
 # --------------------------------------------------------------------------- #
+# Save gating -- combines the SPEC 5.6 70% threshold with checks 3/4 (SPEC
+# 5.5 #3/#4), one model at a time. Shared by train_winner_tuned.py and
+# train_winner_ensemble.py so the gating LOGIC has exactly one definition --
+# originally written inline in train_winner_tuned.py, extracted here so
+# train_winner_ensemble.py's RF/HGB-untuned save path reuses it instead of
+# duplicating it.
+# --------------------------------------------------------------------------- #
+def gate(run_cleared: bool, importance_flagged: bool, ablation_suspicious: bool,
+        run_key: str | None = None, overrides: dict | None = None) -> tuple[bool, bool, str]:
+    """Returns ``(should_save, overridden, reason)``.
+
+    Check 3 and the SPEC 5.6 70% threshold are NEVER overridden. Only a
+    check-4-only failure (check 3 PASS, check 4 FAIL) can be, and only via an
+    explicit, per-run entry in ``overrides`` (keyed by ``run_key``) -- see
+    ``train_winner_tuned.LR_CHECK4_OVERRIDES`` for the documented precedent.
+    A caller with no override table for its models (e.g. RF/HGB-untuned, which
+    have never needed one) simply omits ``overrides``.
+    """
+    if not run_cleared:
+        return False, False, "did not clear the 70% gate"
+    if not importance_flagged and not ablation_suspicious:
+        return True, False, "checks 3/4 both PASS"
+    if importance_flagged:
+        return False, False, "check 3 flagged (never overridden)"
+    # Only remaining case: check 3 PASS, check 4 FAIL.
+    if overrides and run_key in overrides:
+        return True, True, overrides[run_key]
+    return False, False, "check 4 flagged, no documented override for this model"
+
+
+# --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
 def main() -> int:

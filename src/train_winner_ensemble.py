@@ -292,47 +292,76 @@ def main() -> int:
     )
 
     # ------------------------------------------------------------------ #
-    # 4. SPEC 5.6/CLAUDE.md ~70% stop-and-flag rule, applied to RF and HGB.
+    # 4. Per-model SPEC 5.6 70% gate, combined with the SPEC 5.5 checks 3/4
+    #    result from step 3 above (previously computed but never persisted or
+    #    used to gate the save -- see CLAUDE.md, "untuned RF/HGB regated"
+    #    entry). Each model's own top feature/check3/check4 result, not
+    #    assumed to match the other's.
     # ------------------------------------------------------------------ #
-    print(f"\n{'=' * 78}")
-    over = []
-    if rf_metrics["accuracy"] > TW.SUSPICIOUS_ACCURACY:
-        over.append(("RandomForest", rf_metrics["accuracy"]))
-    if hgb_metrics["accuracy"] > TW.SUSPICIOUS_ACCURACY:
-        over.append(("HistGradientBoosting", hgb_metrics["accuracy"]))
-    if over:
-        for name, acc in over:
-            print(f"\n!! VALIDATION ACCURACY {acc:.4f} FOR {name} EXCEEDS {TW.SUSPICIOUS_ACCURACY} -- "
-                  "SPEC 5.6/5.7 + CLAUDE.md: STOP. This is NOT being reported as a good result. "
-                  "Not proceeding to model save. Flagging for manual review.")
-        return 1
+    print(f"\n{'=' * 78}\nSPEC 5.6/CLAUDE.md ~70% check\n{'=' * 78}")
+    metrics_map = {"RF": rf_metrics, "HGB": hgb_metrics}
+    labels = {"RF": "RandomForest", "HGB": "HistGradientBoosting"}
+    leakage_results = {
+        "RF": {"importance_flagged": rf_res3["flagged"], "ablation_suspicious": rf_res4["suspicious"],
+              "top_feature": rf_res3["top_feature"]},
+        "HGB": {"importance_flagged": hgb_res3["flagged"], "ablation_suspicious": hgb_res4["suspicious"],
+                "top_feature": hgb_res3["top_feature"]},
+    }
+    cleared = {}
+    for key in ("RF", "HGB"):
+        acc = metrics_map[key]["accuracy"]
+        cleared[key] = acc <= TW.SUSPICIOUS_ACCURACY
+        if cleared[key]:
+            print(f"  {labels[key]:<22} accuracy={acc:.4f} <= {TW.SUSPICIOUS_ACCURACY} -- clear.")
+        else:
+            print(f"\n!! VALIDATION ACCURACY {acc:.4f} FOR {labels[key]} EXCEEDS {TW.SUSPICIOUS_ACCURACY} -- "
+                  "SPEC 5.6/5.7 + CLAUDE.md: STOP for this model. Not proceeding to leakage checks "
+                  "or save for it. Flagging for manual review.")
 
-    print(f"\nBoth RF ({rf_metrics['accuracy']:.4f}) and HGB ({hgb_metrics['accuracy']:.4f}) "
-          f"validation accuracy are <= {TW.SUSPICIOUS_ACCURACY} -- proceeding to save.")
-
     # ------------------------------------------------------------------ #
-    # 5. Save both models.
+    # 5. Per-model save gating -- each of RF/HGB is saved independently based
+    #    on its OWN 70% gate + SPEC 5.5 checks 3/4 result, reusing the exact
+    #    gating function train_winner_tuned.py uses (``LC.gate``) rather than
+    #    a second copy of the logic. No override table for these two models
+    #    -- a check-4-only failure here is simply NOT saved (RF/HGB have never
+    #    needed the kind of documented exception LR's overrides record).
     # ------------------------------------------------------------------ #
+    print(f"\n{'=' * 78}\nPer-model save decision\n{'=' * 78}")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    rf_out = MODELS_DIR / "rf_winner.joblib"
-    joblib.dump(
-        {"pipeline": rf_pipe, "feature_cols": TW.FEATURE_COLS,
-         "train_max_season": TW.TRAIN_MAX_SEASON, "val_season": TW.VAL_SEASON,
-         "val_metrics": rf_metrics, "params": RF_PARAMS, "random_state": 0},
-        rf_out,
-    )
-    print(f"\nSaved fitted RandomForest pipeline -> {rf_out}  ({rf_out.stat().st_size:,} bytes)")
+    pipelines = {"RF": rf_pipe, "HGB": hgb_pipe}
+    params_map = {"RF": RF_PARAMS, "HGB": HGB_PARAMS}
+    out_names = {"RF": "rf_winner.joblib", "HGB": "hgb_winner.joblib"}
 
-    hgb_out = MODELS_DIR / "hgb_winner.joblib"
-    joblib.dump(
-        {"pipeline": hgb_pipe, "feature_cols": TW.FEATURE_COLS,
-         "train_max_season": TW.TRAIN_MAX_SEASON, "val_season": TW.VAL_SEASON,
-         "val_metrics": hgb_metrics, "params": HGB_PARAMS, "random_state": 0},
-        hgb_out,
-    )
-    print(f"Saved fitted HistGradientBoosting pipeline -> {hgb_out}  ({hgb_out.stat().st_size:,} bytes)")
+    saved = {}
+    for key in ("RF", "HGB"):
+        res = leakage_results[key]
+        should_save, overridden, reason = LC.gate(
+            cleared[key], res["importance_flagged"], res["ablation_suspicious"], run_key=key,
+        )
+        if not should_save:
+            print(f"  {labels[key]:<22}    NOT SAVED -- {reason}")
+            saved[key] = False
+            continue
+        payload = {
+            "pipeline": pipelines[key], "feature_cols": TW.FEATURE_COLS,
+            "train_max_season": TW.TRAIN_MAX_SEASON, "val_season": TW.VAL_SEASON,
+            "val_metrics": metrics_map[key], "params": params_map[key], "random_state": 0,
+            "leakage_checks": {
+                "check3_top_feature": res["top_feature"],
+                "check3_flagged": res["importance_flagged"],
+                "check4_suspicious": res["ablation_suspicious"],
+                "override_applied": overridden,
+                "override_justification": reason if overridden else None,
+            },
+        }
+        out_path = MODELS_DIR / out_names[key]
+        joblib.dump(payload, out_path)
+        tag = " (OVERRIDE APPLIED)" if overridden else ""
+        print(f"  {labels[key]:<22}    SAVED -> {out_path}  ({out_path.stat().st_size:,} bytes){tag}")
+        saved[key] = True
 
-    return 0
+    print(f"\nsaved: {saved}")
+    return 0 if any(saved.values()) else 1
 
 
 if __name__ == "__main__":

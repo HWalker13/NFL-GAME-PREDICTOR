@@ -550,33 +550,21 @@ def main() -> int:
     out_names = {"LR": "logreg_winner_tuned.joblib", "RF": "rf_winner_tuned.joblib",
                 "HGB": "hgb_winner_tuned.joblib"}
 
-    def gate(run_key: str, run_label: str, run_cleared: bool, res: dict) -> tuple[bool, bool, str]:
-        """Returns (save, overridden, reason). Check 3 and the 70% gate are
-        NEVER overridden -- only a check-4-only failure for LR can be, and
-        only via the explicit LR_CHECK4_OVERRIDES citation."""
-        if not run_cleared:
-            return False, False, "did not clear the 70% gate"
-        importance_flagged = res.get("importance_flagged", True)
-        ablation_suspicious = res.get("ablation_suspicious", True)
-        if not importance_flagged and not ablation_suspicious:
-            return True, False, "checks 3/4 both PASS"
-        if importance_flagged:
-            return False, False, "check 3 flagged (never overridden)"
-        # Only remaining case: check 3 PASS, check 4 FAIL.
-        if run_key in LR_CHECK4_OVERRIDES:
-            return True, True, LR_CHECK4_OVERRIDES[run_key]
-        return False, False, "check 4 flagged, no documented override for this model"
+    # gate() moved to leakage_checks.py (LC.gate) so train_winner_ensemble.py's
+    # RF/HGB-untuned save path can reuse the identical logic instead of a copy.
 
     saved = {}
     for key, search in searches.items():
         run_key = f"{key}-tuned"
-        should_save, overridden, reason = gate(run_key, f"{labels[key]}-tuned", cleared[key],
-                                               leakage_results.get(key, {}))
+        res = leakage_results.get(key, {})
+        should_save, overridden, reason = LC.gate(
+            cleared[key], res.get("importance_flagged", True), res.get("ablation_suspicious", True),
+            run_key=run_key, overrides=LR_CHECK4_OVERRIDES,
+        )
         if not should_save:
             print(f"  {labels[key]:<22}-tuned    NOT SAVED -- {reason}")
             saved[run_key] = False
             continue
-        res = leakage_results.get(key, {})
         payload = {"pipeline": search.best_estimator_, "feature_cols": TW.FEATURE_COLS,
                   "train_max_season": TW.TRAIN_MAX_SEASON, "val_season": TW.VAL_SEASON,
                   "val_metrics": tuned_metrics[key], "best_params": search.best_params_,
@@ -596,11 +584,13 @@ def main() -> int:
               f"({out_path.stat().st_size:,} bytes){tag}")
         saved[run_key] = True
 
-    # LR-untuned: same gate() logic, separate save path (logreg_winner.joblib,
+    # LR-untuned: same LC.gate() logic, separate save path (logreg_winner.joblib,
     # untuned metadata pattern -- params/random_state, not grid/best_params).
     res_u = leakage_results.get("LR-untuned", {})
-    should_save_u, overridden_u, reason_u = gate("LR-untuned", "LogisticRegression-untuned",
-                                                 lr_untuned_cleared, res_u)
+    should_save_u, overridden_u, reason_u = LC.gate(
+        lr_untuned_cleared, res_u.get("importance_flagged", True), res_u.get("ablation_suspicious", True),
+        run_key="LR-untuned", overrides=LR_CHECK4_OVERRIDES,
+    )
     if not should_save_u:
         print(f"  LogisticRegression-untuned  NOT SAVED -- {reason_u}")
         saved["LR-untuned"] = False

@@ -144,6 +144,55 @@ or running the check across multiple seasons by default rather than one
 fixed validation split) so this doesn't require a manual investigation
 every time. Not implemented now — tracked here for Phase 6.
 
+**5a. Untuned RF/HGB baselines regated and re-verified (2026-09-21).** A prior
+audit of this phase found that `rf_winner.joblib` and `hgb_winner.joblib`
+(the untuned baselines, saved by `src/train_winner_ensemble.py`) carried NO
+persisted `leakage_checks` metadata at all -- the module computed checks 3/4
+for both (`LC.feature_importance_inspection` / `LC.ablation_check`) and
+printed the results, but never wrote them into the saved joblib dict, and
+never gated the save on their outcome (only on the SPEC 5.6 70% threshold).
+Their on-disk files also predated the Phase 5B Part 2 commit, so the "RF/HGB
+pass checks 3/4 cleanly, no override" claim elsewhere in this document was
+unverifiable from the files themselves -- true in spirit (the console output
+existed at some point), but not backed by anything reproducible.
+
+Fixed properly, not patched around: the per-model save-gating logic
+(`gate()`) that `src/train_winner_tuned.py` already used for LR/RF/HGB-tuned
+was extracted to `src/leakage_checks.py` as `LC.gate()` -- one shared
+definition, not a second copy -- and `train_winner_ensemble.py`'s RF/HGB
+save path was rewritten to call it per-model (previously it gated both
+models on a single combined 70% check and saved both unconditionally
+otherwise). Both untuned baselines were then actually re-run through this
+real save path (`python -m src.train_winner_ensemble`, not a diagnostic) to
+get first re-verified, persisted evidence rather than trusting the
+console-only Sep 17 result:
+
+- **RandomForest-untuned:** check 3 top feature `elo_diff` (9.3% share,
+  well under the 40% flag threshold) -- PASS. Check 4 (drop `elo_diff`,
+  retrain): accuracy 0.6543 -> 0.6320 (delta -0.0223, degrades gracefully,
+  no collapse-to-baseline, no increase) -- PASS. **Both checks PASS, no
+  override needed or applied.**
+- **HistGradientBoosting-untuned:** check 3 top feature `elo_diff` (12.6%
+  share) -- PASS. Check 4 (drop `elo_diff`, retrain): accuracy 0.6394 ->
+  0.6134 (delta -0.0260, degrades gracefully) -- PASS. **Both checks PASS,
+  no override needed or applied.**
+
+Accuracy/log-loss/brier/ROC-AUC for both matched the prior Sep 17 numbers
+exactly (0.6543/0.6394 respectively), confirming the current committed
+`train_winner_ensemble.py` reproduces the same result deterministically --
+resolves the open provenance question from the prior audit either way, since
+the files are now known-current regardless. Neither model exceeded the SPEC
+5.6 70% threshold. Both models were re-saved (`models/rf_winner.joblib`,
+`models/hgb_winner.joblib`, 2026-09-21 14:06) with a `leakage_checks` key of
+the identical shape used by all four other saved models
+(`check3_top_feature`, `check3_flagged`, `check4_suspicious`,
+`override_applied`, `override_justification`). All six models now carry
+consistent, persisted leakage-check metadata -- verified side by side after
+the re-save. `logreg_winner.joblib` (untuned LR) was NOT touched by this run
+(`train_winner_ensemble.py`'s own stale-feature-count guard did not fire --
+confirmed 67 == 67 before running -- so its existing override metadata from
+the check-4 investigation above was left exactly as-is).
+
 **5. Confirmed explicitly:** season 2022 (validation) and seasons
 2023-2024 (test) were NEVER touched by any diagnostic script in this
 entire investigation (`scripts/diagnose_elo_lr.py`,
