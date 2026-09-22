@@ -1,7 +1,7 @@
 # NFL Game Outcome Prediction — Project Specification
 
-**Version:** 2.0
-**Status:** Active build spec — Phase 1 (Win/Loss MVP)
+**Version:** 3.0
+**Status:** Phase 1 (Win/Loss MVP) complete and reviewed at the Phase 7 gate (2026-09-22, see `docs/PHASE7_REVIEW.md`). Active roadmap: Phases 8–11 in Section 13 (calibration + 2025 holdout, data-layer spike, 2026 shadow mode, totals regression).
 **Audience:** Written to be read and executed by an AI coding agent (e.g. Claude Code), with human review.
 **Stack:** Python, pandas, scikit-learn, nfl_data_py
 **Budget:** $0 — free/public resources only
@@ -12,7 +12,7 @@
 
 ## 0. Read This First — Constraint Summary
 
-- **Current build target:** binary win/loss classification only. Spread and total regression are **fully specified but explicitly deferred** — see Section 12. Do **NOT** implement Section 12 until Phase 1 (Section 13) is complete and reviewed.
+- **Current build target:** binary win/loss classification (Phase 1, complete), followed by the Phase 8–11 roadmap in Section 13. Per the Phase 7 review, **total-points regression is in scope for Phase 11 only**; **spread regression remains deferred** — see Section 12. Do **NOT** implement any Section 12 code before its scheduled phase.
 - **Cost constraint:** every data source, library, and compute resource used in this project **MUST** be free. See Section 3.2 for an explicit allow/deny list.
 - **The single highest-risk failure mode in this project is data leakage**, not model choice. Section 5 is the longest section in this document for that reason and **MUST** be read in full before any feature-engineering code is written.
 - **Accuracy expectations are capped by the problem domain, not by model quality.** A test-set accuracy above ~70% is not a win to report — it is a signal to stop and run the leakage audit in Section 5.6. See Section 5.7 for why.
@@ -62,7 +62,7 @@ The original request referenced nflfastR — flagging this explicitly: **nflfast
 Functions needed for Phase 1:
 
 - `nfl_data_py.import_pbp_data(years)` — play-by-play data with **EPA (Expected Points Added)** already calculated per play. Foundation for both QB and defensive features.
-- `nfl_data_py.import_schedules(years)` — one row per game: final scores, **Vegas opening/closing lines**, rest days, roof/stadium type, week, season type, game date/kickoff time.
+- `nfl_data_py.import_schedules(years)` — one row per game: final scores, **one Vegas line per game** (`spread_line`, `total_line`, moneylines; nflverse does not document whether these are opening or closing, and they carry no timestamp — see `docs/PHASE7_REVIEW.md` §3.1), rest days, roof/stadium type, week, season type, game date/kickoff time.
 
 `nfl_data_py.import_weekly_data(years)` is available as a pre-aggregated shortcut but `SHOULD NOT` be the primary source for Phase 1 — computing rolling stats directly from play-by-play data gives full control over the point-in-time correctness required in Section 5.
 
@@ -323,33 +323,37 @@ nfl-prediction/
 └── README.md
 ```
 
-`train_spread.py` and `train_total.py` are intentionally **not** included yet — they belong to Section 12 and `MUST NOT` be started until Phase 1 is complete and reviewed.
+`train_spread.py` and `train_total.py` are intentionally **not** included yet — they belong to Section 12. `train_total.py` `MUST NOT` be started before Phase 11; `train_spread.py` `MUST NOT` be started until spread regression is explicitly brought back into scope.
 
 ---
 
-## 12. Deferred Scope — Full Suite (Spread & Total Regression)
+## 12. Full Suite — Spread & Total Regression (revised at the Phase 7 review)
 
-**Status: fully specified, but explicitly NOT part of the current build. Do not implement anything in this section until Phase 1 (Section 13) is reviewed and the decision is made to proceed.**
+**Status (v3.0):** Phase 1 was reviewed on 2026-09-22 (`docs/PHASE7_REVIEW.md`). Decision:
+- **12.2 Total points: IN SCOPE for Phase 11** (Section 13). Not before.
+- **12.1 Spread: DEFERRED, not dropped.** Reason: scope control. The winner model is already a coarse margin model, and spread is the primary betting market, so spread remains a future candidate. Do not implement 12.1 until it is explicitly brought back into scope.
 
-This section is preserved so the full original vision isn't lost — only postponed.
-
-### 12.1 Spread (regression)
+### 12.1 Spread (regression) — DEFERRED
 - **Baseline:** `LinearRegression` predicting home margin from the same rolling QB/defense features as Phase 1, plus a home-field indicator.
 - **Next:** `RandomForestRegressor`, `HistGradientBoostingRegressor`.
 - **Reality check:** point spreads have high game-to-game variance (a single turnover can swing a game by two scores independent of team quality). Expect MAE in the 9–11 point range even for well-built models — the betting market itself doesn't do dramatically better.
 - **Success bar:** beat "predict the average historical home-field margin (~2.5 points) for every game."
 
-### 12.2 Total points (regression)
-- Same model progression as spread.
+### 12.2 Total points (regression) — IN SCOPE, Phase 11
+- Same model progression as spread (`LinearRegression` → `RandomForestRegressor` → `HistGradientBoostingRegressor`), built on the existing leakage-safe pipeline (Section 5 applies in full).
 - Additional features to reintroduce here: pace of play (plays per game), wind speed (suppresses passing and total scoring), dome vs. outdoor.
-- **Success bar:** beat "predict the league-average total (~44–46 points) for every game."
+- The Vegas `total_line` `MUST NOT` be used as a feature (Section 5.2, category 4) — benchmark only.
+- **Kill criteria — two tiers, evaluated on held-out seasons only:**
+  - **Portfolio tier:** test-set MAE `MUST` beat a "predict the training-set mean total for every game" baseline. The mean `MUST` be computed from the training seasons, not hardcoded (the historical ~44–46 figure is reference only). **Fail → drop totals.**
+  - **Betting tier:** over/under hit rate against the Vegas `total_line` `MUST` exceed **52.38%** (breakeven at −110). **Fail → keep totals as a portfolio artifact only; not used for betting.**
+- Before Phase 11 starts, the held-out season(s), push handling (games landing exactly on the line), and any significance requirement on the betting tier `MUST` be written down (see `docs/PHASE7_REVIEW.md` §5).
 
 ### 12.3 Why these were deferred, not cut
 The feature pipeline built in Phase 1 (Sections 3–5) is almost entirely reusable here — the rolling QB/defense features don't change, only the target variable and model type do. Deferring these targets costs little rework later; attempting all three at once from the start, per Section 1.2, was the higher-risk path.
 
 ---
 
-## 13. Project Phases / Milestones (Phase 1 Only)
+## 13. Project Phases / Milestones
 
 | Phase | Deliverable | Notes |
 |---|---|---|
@@ -360,18 +364,28 @@ The feature pipeline built in Phase 1 (Sections 3–5) is almost entirely reusab
 | 4 — MVP model | Baseline `LogisticRegression`, evaluated against the home-team baseline (Section 2) | First "does this work at all" checkpoint |
 | 5 — Model iteration | Random Forest / HistGradientBoosting, calibration, Section 7.2 techniques | |
 | 6 — Walk-forward backtesting | Multi-season validation per Section 6 | |
-| 7 — Review gate | Compare results to Section 2 criteria; decide whether to proceed to Section 12 (deferred spread/total scope) | This document should be updated at this checkpoint, not before |
+| 7 — Review gate | Compare results to Section 2 criteria; decide whether to proceed to Section 12 (deferred spread/total scope) | **Complete (2026-09-22)** — `docs/PHASE7_REVIEW.md`. Phase 1 MUSTs met; calibration SHOULD open; Vegas stretch goal not met. |
+| 8 — Calibration + 2025 holdout | Wrap the models in `CalibratedClassifierCV` fit without touching any test season, using a season-based splitter (not the default row-wise k-fold — Section 6); then evaluate once on the 2025 full season (train ≤2024 → predict 2025) | Confirms or revises the provisional deployment model (LR-tuned, chosen on parsimony because the four models are statistically tied). 2025 also serves as the SPEC 5.6 check-4 "additional untouched season." |
+| 9 — Data-layer spike | Test whether `nfl_data_py` can still pull 2026 in-season data. If not, migrate **only** `data_ingest.py` to `nflreadpy`, converting polars → pandas at that boundary so nothing downstream changes | `nfl_data_py` was deprecated by nflverse (Sept 2025). Also fix in-season cache refresh (current cache never re-pulls a cached season without re-pulling all seasons). |
+| 10 — 2026 shadow mode | Retrain through the latest complete season, **freeze** (Section 13.1), log predictions and model-vs-implied-probability edges **before kickoff** each week, with the line snapshotted at logging time; grade after | Paper trading only for the entire 2026 season. No real-money use is justified before a full season of forward results exists. |
+| 11 — Totals model | Section 12.2, on the existing leakage-safe pipeline | Judged by the Section 12.2 kill criteria |
+
+### 13.1 Deployment freeze rule
+
+The live model `MUST` be locked for the season, except at pre-scheduled checkpoints (default: **one midseason checkpoint**). Experimental changes `MUST` happen on a separate copy and be compared against the frozen model; they `MUST NOT` be swapped in ad hoc. **Why:** week-by-week retuning on live results is test-set peeking in slow motion. The first candidate for the midseason checkpoint is the starting-QB-changed flag (Section 9, item 3).
 
 ---
 
-## 14. Out of Scope (Phase 1)
+## 14. Out of Scope
 
-- Spread and total prediction (Section 12 — deferred, not cut)
+**Amended at the Phase 7 review (v3.0):** deployment is now in scope, as the local, frozen, paper-trading-only 2026 shadow mode in Phase 10. Total-points prediction is in scope for Phase 11.
+
+- Spread prediction (Section 12.1 — deferred, not cut)
 - Live/in-game win probability updates
 - Deep learning approaches (unnecessary for tabular data at this scale, and outside the scikit-learn-only, $0-cost constraint)
 - Player prop predictions
-- Betting bankroll/staking strategy
-- Automated weekly deployment
+- Betting bankroll/staking strategy, and any real-money betting use (at minimum until a full season of Phase 10 forward results exists)
+- Cloud or paid deployment infrastructure (Phase 10 runs locally, $0)
 
 ---
 

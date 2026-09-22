@@ -243,7 +243,8 @@ p=0.0963; the two comparisons that matter for a "best model" claim --
 LR-tuned vs RandomForest, p=0.3240, and LR-tuned vs HGB-tuned, p=0.3222 --
 are both far from significant). LR-tuned is numerically highest (+1.3-1.5pt
 over RF/HGB) but that gap is not distinguishable from chance at this
-sample size (n=544, only 31-50 discordant games per pair). Treat the
+sample size (n=544, only 18-50 discordant games per pair; corrected
+from "31-50" at the Phase 7 reproduction -- LR-untuned vs LR-tuned has 18). Treat the
 ranking among the three non-baseline-adjacent models as a tie, not a
 result.
 
@@ -283,3 +284,60 @@ This is the final, one-time SPEC Section 2 test-set result. Seasons
 2023-2024 are no longer "never touched" as of this entry -- any future
 work that re-touches them (e.g. further tuning) would no longer be a
 clean walk-forward test and must be flagged as such.
+
+## Phase 7 Review Gate (2026-09-22)
+
+Full record: `docs/PHASE7_REVIEW.md`. SPEC bumped to v3.0. No retraining for
+selection, no tuning, no feature changes, no calibration, no new data pulls,
+no Section 12 code.
+
+- **Provenance gap closed.** The Phase 6 walk-forward and McNemar scripts
+  lived only in a session `/tmp` scratchpad and never saved per-game output.
+  Re-implemented as `scripts/reproduce_walkforward_predictions.py` (models
+  are `clone()`s of the saved pipelines, random_state=0). It reproduced all
+  four pooled accuracies exactly as integer counts (342/350/343/342 of 544)
+  and all three recorded McNemar p-values, and wrote
+  `data/processed/walkforward_test_predictions.parquet` (544 rows). It
+  refuses to write unless every number matches.
+- **Vegas benchmark -- DESCRIPTIVE ONLY** (`scripts/vegas_benchmark_2023_2024.py`).
+  No model/feature/hyperparameter/calibration/deployment-model decision may
+  ever be based on it; that is what keeps it from being a second use of
+  2023-2024. Pooled n=544: Vegas favorite 69.67%, vig-free moneyline implied
+  prob 69.85% / log loss 0.6074 / Brier 0.2094 / AUC 0.7306, vs models
+  62.87-64.34% / 0.638-0.648 / 0.224-0.228 / 0.670-0.683 (model probs
+  uncalibrated). The AUC gap does not depend on calibration. On games where a model
+  disagrees with the Vegas favorite (n=91-111), the model is right only
+  32-34% (all Wilson 95% upper bounds <45%, McNemar p<0.01 for all four,
+  same direction both seasons). Stretch goal: NOT met. nflverse docs do not
+  say whether the line columns are opening or closing; treat as an
+  untimestamped single line. Caveat: because it is untimestamped and may be
+  at or near closing, the line may embed kickoff-time information
+  (injuries, weather, late news) the model structurally lacks. This does
+  NOT soften the finding -- it is why Phase 10 must snapshot lines at
+  prediction-log time, giving the fairer comparison against the line
+  available when the prediction is made.
+- **SPEC 2 verdict:** baseline-margin MUST met (+8.5 to +9.9pt);
+  walk-forward MUST met; leakage MUST met with documented LR override;
+  calibration SHOULD not met (Phase 8); mid-to-high-60s SHOULD marginal,
+  LR-tuned only (64.34%); Vegas stretch not met.
+- **Decisions (owner's, recorded):** totals regression IN SCOPE for Phase 11
+  with two-tier kill criteria (MAE vs train-mean baseline -> drop; O/U hit
+  rate vs total_line > 52.38% -> else portfolio-only); spread DEFERRED, not
+  dropped. Deployment in scope: Phase 8 calibration + 2025 holdout, Phase 9
+  data-layer spike (nflreadpy only if needed, data_ingest.py only), Phase 10
+  2026 frozen shadow mode (paper trading only), Phase 11 totals. Freeze
+  rule: live model locked except at pre-scheduled checkpoints (default one
+  midseason); experiments on a copy only. Deployment model: LR-tuned on
+  parsimony grounds, PROVISIONAL until after Phase 8 (models statistically
+  tied; note LR-tuned is also the check-4-override model).
+- **2025 status:** raw pbp + schedules for 2025 are cached and complete
+  (272/272 REG games), and `game_features.parquet` already holds 271 2025 rows.
+  No model has been evaluated on 2025. Treat it as the untouched Phase 8
+  holdout; the only prior touch is `evaluate.py __main__` printing the 2025
+  home-win rate.
+- **Flagged for Phase 8+ (not acted on):** CalibratedClassifierCV's default
+  cv mixes seasons -- use a season splitter or a pre-fit model plus a single
+  calibration season; Phase 10 must snapshot lines at prediction-log time;
+  the 52.38% betting tier needs a significance rule and pre-declared holdout
+  seasons/push handling; a +/-3pt margin on 272 games is 1 SE, and the 95%
+  margin is +/-5.9pt; `data_ingest.py` cache never refreshes an in-season file.
