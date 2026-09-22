@@ -204,6 +204,82 @@ seasons strictly within 2002-2021. Only the real, existing
 `train_winner_tuned.py` pipeline (approved, pre-existing evaluation logic)
 ever touches season 2022, and only to compute the reported validation
 metrics — never to select features or hyperparameters based on test-set
-performance. **The held-out 2023-2024 test set has still never been
-touched by anything in this project — SPEC Section 2's actual Definition
-of Done (final test-set evaluation) has not happened yet.**
+performance. As of the entry below, this is no longer current — the
+held-out 2023-2024 test set has now been touched, exactly once, for the
+final Definition-of-Done evaluation.
+
+## Phase 1 Definition of Done — Final Walk-Forward Test Result (2026-09-22)
+
+SPEC Section 6's "recommended extension" walk-forward backtest run once,
+final, against the previously-untouched 2023-2024 test seasons (confirmed
+untouched beforehand: grep of src/ and scripts/ for "2023"/"2024" showed
+only comments/docstrings/the FORBIDDEN_TEST_SEASONS guard). Locked-in
+hyperparameters and the 67-feature set were loaded directly from each
+saved model's joblib metadata -- no tuning, no feature changes, no
+iteration in this session. RF-untuned skipped: confirmed identical
+hyperparameters to RF-tuned (max_depth=8, min_samples_leaf=5,
+n_estimators=300 -- GridSearchCV's best_params_ landed exactly on the
+untuned baseline's hand-picked values).
+
+Step A: train 2002-2022 (n=5,393) -> test 2023 (n=272).
+Step B: train 2002-2023 (n=5,665) -> test 2024 (n=272).
+Pooled 2023+2024 (n=544): each season predicted only by the model trained
+on strictly-prior data (Step A's model predicts 2023, Step B's predicts
+2024) -- not a single model retrained on 2002-2024.
+
+| model          | pooled acc | log_loss | brier  | roc_auc |
+|----------------|-----------:|---------:|-------:|--------:|
+| home_baseline  |     0.5441 |        - |      - |       - |
+| LR-untuned     |     0.6287 |   0.6479 | 0.2282 |  0.6698 |
+| LR-tuned       |     0.6434 |   0.6434 | 0.2261 |  0.6774 |
+| RandomForest   |     0.6305 |   0.6380 | 0.2237 |  0.6834 |
+| HGB-tuned      |     0.6287 |   0.6418 | 0.2255 |  0.6789 |
+
+All four models are statistically indistinguishable in pooled test
+accuracy: a follow-up McNemar's exact test (paired, all 6 pairwise
+comparisons among the four models on the identical 544 test games) found
+no pair significant at p<0.05 (closest overall: LR-untuned vs LR-tuned,
+p=0.0963; the two comparisons that matter for a "best model" claim --
+LR-tuned vs RandomForest, p=0.3240, and LR-tuned vs HGB-tuned, p=0.3222 --
+are both far from significant). LR-tuned is numerically highest (+1.3-1.5pt
+over RF/HGB) but that gap is not distinguishable from chance at this
+sample size (n=544, only 31-50 discordant games per pair). Treat the
+ranking among the three non-baseline-adjacent models as a tie, not a
+result.
+
+SPEC 2 Definition of Done: MET on the baseline comparison, which IS
+decisive -- every model's margin over home_baseline is well above the
++3-5pt bar (+8.5 to +9.9pts pooled) and clears it by a much wider margin
+than any pairwise model-vs-model gap, so this conclusion does not depend
+on the (statistically noisy) ranking among models.
+
+Pooled accuracy (62.87%-64.34% across the four models) sits just below
+SPEC 5.7's realistic mid-60s-to-high-60s SHOULD-range for three of the
+four models -- LR-untuned (62.87%), HGB-tuned (62.87%), and RandomForest
+(63.05%) are all low-60s, not mid-60s. Only LR-tuned's pooled 64.34%
+arguably reaches the range's low edge. This is a SHOULD, not a MUST,
+criterion (SPEC Section 2), so it does not change the Definition-of-Done
+conclusion above, which rests on the baseline-margin MUST instead and is
+cleared decisively regardless. The one number that actually lands
+mid-60s-to-high-60s is a single-season figure, not the pooled headline:
+LR-tuned on 2024 alone reached 66.54% (Step B) -- not representative of
+the pooled result and not being substituted for it here.
+
+Reassurance, from numbers already in hand (no new computation): each
+model's shift from validation (2022) accuracy to pooled test accuracy is
+within the ~3pt noise band already established elsewhere in this project
+(LR-untuned +0.4pt, LR-tuned +2.6pt, RandomForest -2.4pt, HGB-tuned
+-2.2pt). No model's performance collapsed going from validation to real
+test data -- mild evidence against overfitting to the validation season,
+though not proof of it.
+
+Open item, not silently omitted: SPEC 7.3 probability calibration
+(CalibratedClassifierCV) was NOT applied in this phase to any of the four
+models -- reported log_loss/brier/roc_auc above are on raw
+(uncalibrated) predict_proba output. Flagged for Phase 7 discussion,
+not addressed here.
+
+This is the final, one-time SPEC Section 2 test-set result. Seasons
+2023-2024 are no longer "never touched" as of this entry -- any future
+work that re-touches them (e.g. further tuning) would no longer be a
+clean walk-forward test and must be flagged as such.
