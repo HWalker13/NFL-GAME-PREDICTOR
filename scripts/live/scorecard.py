@@ -20,7 +20,7 @@ from scipy import stats
 from scripts.live import common as C
 
 CHECKPOINT_WEEK = 9
-FIRST_LIVE_WEEK = 4
+CHECKPOINT_FIRST_WEEK = 4   # checkpoint window is weeks 4-9 (88 games); week 3 is official but outside it (prereg Amendment 1)
 ALPHA = 0.05
 EDGE_BUCKETS = ((0.04, 0.06), (0.06, 0.08), (0.08, np.inf))   # [lo, hi), descriptive only
 SMALL_BUCKET_N = 30
@@ -292,19 +292,19 @@ def paired_ll(df: pd.DataFrame, max_week: int | None = None) -> pd.Series:
 
 
 def checkpoint_section(df: pd.DataFrame) -> str:
-    shadow = df[df["week"].between(FIRST_LIVE_WEEK, CHECKPOINT_WEEK)]
+    shadow = df[df["week"].between(CHECKPOINT_FIRST_WEEK, CHECKPOINT_WEEK)]
     weeks_done = sorted(shadow["week"].unique().tolist())
-    all_weeks = list(range(FIRST_LIVE_WEEK, CHECKPOINT_WEEK + 1))
+    all_weeks = list(range(CHECKPOINT_FIRST_WEEK, CHECKPOINT_WEEK + 1))
     pending = int((shadow["result"] == "pending").sum())
     head = (f"## Midseason checkpoint (after week {CHECKPOINT_WEEK})\n\n"
             f"Rule (pre-registered): the challenger replaces the champion for the rest of the season ONLY if "
-            f"its mean per-game log loss over all shadow weeks ({FIRST_LIVE_WEEK}-{CHECKPOINT_WEEK}) is lower "
+            f"its mean per-game log loss over the checkpoint window (weeks {CHECKPOINT_FIRST_WEEK}-{CHECKPOINT_WEEK}) is lower "
             f"by more than {CHECKPOINT_MARGIN:.3f} (mean challenger - champion < -{CHECKPOINT_MARGIN:.3f}) AND a "
             f"one-sided paired t-test on per-game log loss gives p < {ALPHA} (Phase 8's rule). Otherwise the "
             f"champion continues and the comparison is recorded. A swap at n = 88 is unlikely; the "
             f"comparison's main value is informing the 2027 model.\n\n")
     if weeks_done != all_weeks or pending:
-        return head + (f"Not yet evaluable: graded shadow weeks {weeks_done or 'none'}, "
+        return head + (f"Not yet evaluable: graded checkpoint weeks {weeks_done or 'none'}, "
                        f"{pending} pending game(s). The decision is taken once, after week "
                        f"{CHECKPOINT_WEEK} is fully graded.\n")
     d = paired_ll(shadow)

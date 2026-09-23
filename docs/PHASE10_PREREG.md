@@ -6,7 +6,7 @@
 
 **Date drafted:** 2026-09-22 (US/Pacific)
 **SPEC reference:** Section 13, Phase 10; Section 13.1 (freeze rule); Section 14 (paper trading only).
-**First official week:** Week 4 (Thursday 2026-10-01, `2026_04_PIT_CLE`, 20:15 ET).
+**First official week:** Week 3 (Thursday 2026-09-24, `2026_03_ATL_GB`, 20:15 ET). Changed from week 4 by Amendment 1.
 
 This document fixes, before any official prediction exists, what is predicted, how paper bets are placed, how everything is graded, and the only two decisions the season can produce. Nothing here may be changed after approval except through a dated amendment at the bottom that states what changed and why, and never in a way that uses results already seen.
 
@@ -286,4 +286,4 @@ Each official run also records `predict_week.py` / `common.py` hashes in its `we
 
 ## Amendments
 
-_None._
+**Amendment 1 (2026-09-23, owner):** first official week changed from 4 to 3. Made before any official prediction exists and before any week-3 outcome exists. Reason: the build finished earlier than planned; the prediction path (the only irreversible step) was dry-run on week 3 in scratch with all guards passing; grading and scorecard are regenerable by design, so untested settlement cannot damage the official record. Week 3 counts toward the official record and the season-end verdict. The midseason checkpoint window is UNCHANGED: weeks 4-9, 88 games. Code change with this amendment: scripts/live/scorecard.py -- constant FIRST_LIVE_WEEK renamed to CHECKPOINT_FIRST_WEEK and checkpoint wording updated; checkpoint logic unchanged (weeks 4-9). Appendix B hashes record drafting time and are intentionally not updated.

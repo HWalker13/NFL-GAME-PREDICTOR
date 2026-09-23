@@ -468,6 +468,28 @@ class TestScorecard(unittest.TestCase):
         df = pd.concat([_graded(range(4, 10), 0.60, 0.65), _graded(range(10, 14), 0.70, 0.40)])
         self.assertIn("NO SWAP", S.checkpoint_section(df))
 
+    def test_checkpoint_excludes_week3(self):
+        # Amendment 1: week 3 is official but outside the checkpoint window (weeks 4-9).
+        # A week 3 strongly favouring either model must not change the decision ...
+        df = pd.concat([_graded([3], 0.70, 0.40), _graded(range(4, 10), 0.60, 0.65)])
+        self.assertIn("NO SWAP", S.checkpoint_section(df))
+        df = pd.concat([_graded([3], 0.40, 0.70), _graded(range(4, 10), 0.65, 0.60)])
+        self.assertIn("Decision: SWAP", S.checkpoint_section(df))
+        # ... is not counted in n (6 weeks x 15 games) ...
+        self.assertIn("n = 90 paired games", S.checkpoint_section(df))
+        # ... does not stand in for a missing checkpoint week, and a pending week 3 does not block it.
+        self.assertIn("Not yet evaluable", S.checkpoint_section(
+            pd.concat([_graded([3], 0.65, 0.60), _graded(range(4, 9), 0.65, 0.60)])))
+        self.assertIn("Decision: SWAP", S.checkpoint_section(
+            pd.concat([_graded([3], 0.65, 0.60, pending_week=3), _graded(range(4, 10), 0.65, 0.60)])))
+        self.assertEqual((S.CHECKPOINT_FIRST_WEEK, S.CHECKPOINT_WEEK), (4, 9))
+
+    def test_week3_counts_toward_season_verdict(self):
+        # Amendment 1: week-3 official bets are part of the season-end CLV verdict.
+        wk3 = _graded([3], 0.6, 0.6, clv=0.02)
+        self.assertIn("**Evidence of an edge**", S.verdict_section(wk3, True))
+        self.assertIn(f"n = {len(S.official_bets(wk3))};", S.verdict_section(wk3, True))
+
     def test_verdict_needs_significant_positive_clv(self):
         self.assertIn("**Evidence of an edge**", S.verdict_section(_graded(range(4, 6), 0.6, 0.6, clv=0.02), True))
         self.assertIn("**No evidence of an edge**", S.verdict_section(_graded(range(4, 6), 0.6, 0.6, clv=-0.02), True))

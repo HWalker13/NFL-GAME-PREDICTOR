@@ -449,7 +449,7 @@ Full record: `docs/PHASE9_DATA_LAYER.md`. No training, no feature changes.
 ## Phase 10 — 2026 shadow mode (pre-registered 2026-09-23)
 
 Full rules: `docs/PHASE10_PREREG.md` (APPROVED 2026-09-23, sha256 2177f3b5…).
-Paper trading only; first official week = 4.
+Paper trading only; first official week = 4 (changed to 3 by Amendment 1, 2026-09-23).
 
 - **Standing rule:** the agent never passes `--live` and never writes under
   `data/live/` or `docs/live/`, including to test guards (guards are tested
