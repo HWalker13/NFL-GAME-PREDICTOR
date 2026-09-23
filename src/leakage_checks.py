@@ -571,6 +571,73 @@ def ablation_check(train_df: pd.DataFrame, val_df: pd.DataFrame,
 
 
 # --------------------------------------------------------------------------- #
+# Known, investigated check-4 false positive (Phase 10 prerequisite)
+# --------------------------------------------------------------------------- #
+# The CLI's check 4 (LogisticRegression C=1.0, train <=2021, validate 2022)
+# has flagged 'away_def_epa_early_ewm' on every run since Phase 5A: accuracy
+# 0.6245 -> 0.6320 (168/269 -> 170/269) after dropping it. Investigated and
+# recorded as a false positive in CLAUDE.md (Phase 5B Part 2, item 2): 12-fold
+# TRAIN-only rotating holdout, sign test p=0.6875. A check that always fails
+# trains the owner to ignore failures, so the exception is encoded with its
+# EXACT expected values: it passes only on an exact match (as integer correct
+# counts, so there is no float tolerance to argue about) and fails loudly if
+# those numbers move at all, or if any other feature trips check 4.
+KNOWN_CHECK4_EXCEPTIONS = {
+    "away_def_epa_early_ewm": {
+        "model": "LogisticRegression",
+        "n_val": 269,
+        "full_correct": 168,      # 0.6245
+        "ablated_correct": 170,   # 0.6320
+        "citation": "CLAUDE.md, Phase 5B Part 2 item 2 (scripts/diagnose_feature_noise.py, p=0.6875)",
+    },
+}
+
+
+def check4_known_exception(res4: dict, n_val: int,
+                           exceptions: dict = KNOWN_CHECK4_EXCEPTIONS) -> tuple[bool, str]:
+    """Decide check 4 given the documented exceptions. Returns ``(ok, message)``.
+
+    * Dropped feature has a documented exception: ``ok`` only if the model,
+      the validation size, and BOTH correct counts match exactly, the flag is
+      the documented "increase" and not a collapse to baseline. Any drift in
+      those numbers fails, even if the new numbers would pass on their own --
+      the features are frozen, so a change means the pipeline changed.
+    * Any other dropped feature: the plain SPEC 5.5 #4 verdict, no exception.
+    """
+    feat = res4["dropped_feature"]
+    exc = exceptions.get(feat)
+    if exc is None:
+        if res4["suspicious"]:
+            return False, (f"CHECK 4  FAIL: '{feat}' tripped check 4 and has NO documented "
+                           "exception -- investigate before trusting any model.")
+        return True, "CHECK 4  PASS (no red flags)."
+
+    got = {
+        "model": res4["model"],
+        "n_val": n_val,
+        "full_correct": int(round(res4["full_accuracy"] * n_val)),
+        "ablated_correct": int(round(res4["ablated_accuracy"] * n_val)),
+        "increased_after_removal": bool(res4["increased_after_removal"]),
+        "collapsed_to_baseline": bool(res4["collapsed_to_baseline"]),
+    }
+    want = {k: exc[k] for k in ("model", "n_val", "full_correct", "ablated_correct")}
+    want.update({"increased_after_removal": True, "collapsed_to_baseline": False})
+    diffs = {k: (want[k], got[k]) for k in want if want[k] != got[k]}
+    if diffs:
+        return False, (
+            f"CHECK 4  FAIL (LOUD): the documented exception for '{feat}' no longer matches -- "
+            f"expected vs got: {diffs}. The features and model are frozen, so this means "
+            "something in the pipeline changed. Investigate; do NOT update the expected "
+            "values without a new investigation."
+        )
+    return True, (
+        f"CHECK 4  PASS (known exception): '{feat}' {exc['full_correct']}/{n_val} -> "
+        f"{exc['ablated_correct']}/{n_val} exactly matches the documented, investigated "
+        f"false positive ({exc['citation']})."
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Save gating -- combines the SPEC 5.6 70% threshold with checks 3/4 (SPEC
 # 5.5 #3/#4), one model at a time. Shared by train_winner_tuned.py and
 # train_winner_ensemble.py so the gating LOGIC has exactly one definition --
@@ -649,7 +716,9 @@ def main() -> int:
     res3 = feature_importance_inspection(pipe, TW.FEATURE_COLS)
     res4 = ablation_check(train_only, val_only, TW.FEATURE_COLS,
                           res3["top_feature"], full_metrics, val_baseline)
-    ok = ok and not res3["flagged"] and not res4["suspicious"]
+    check4_ok, check4_msg = check4_known_exception(res4, len(val_only))
+    print(check4_msg)
+    ok = ok and not res3["flagged"] and check4_ok
 
     print()
     if ok:

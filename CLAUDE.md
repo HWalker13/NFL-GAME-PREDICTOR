@@ -444,3 +444,47 @@ Full record: `docs/PHASE9_DATA_LAYER.md`. No training, no feature changes.
   Before Phase 10, encode the known exception with its expected values
   (0.6245 -> 0.6320) so the check passes on an exact match and fails on any
   change -- a check that always fails trains the owner to ignore failures.
+  -- RESOLVED in Phase 10 (exact-count exception; see Phase 10 entry).
+
+## Phase 10 — 2026 shadow mode (pre-registered 2026-09-23)
+
+Full rules: `docs/PHASE10_PREREG.md` (APPROVED 2026-09-23, sha256 2177f3b5…).
+Paper trading only; first official week = 4.
+
+- **Standing rule:** the agent never passes `--live` and never writes under
+  `data/live/` or `docs/live/`, including to test guards (guards are tested
+  by direct function calls on temp files, `scripts/test_phase10_live.py`).
+  Default output is the gitignored `data/live_scratch/`.
+- **Frozen models** (read-only, tracked, sha256 pinned in
+  `scripts/live/common.py: FROZEN_MODELS`; `predict_week` refuses on any change,
+  and on any change to `src/features.py` sha256 6be77b8d…):
+  - champion `models/live_2026_champion.joblib` f813a2b0… — LR-tuned (C=0.01,
+    67 features, random_state=0), trained 2002–2025, ELO_HOME_ADV 44.73, raw probs.
+  - challenger `models/live_2026_challenger_calibrated.joblib` 185d565f… —
+    champion + OOF walk-forward sigmoid (src/calibration.py, T=2026, OOF
+    2021–2025 by the T−5..T−1 rule): slope 0.8832, intercept −0.0391.
+    Hypothetical bets only.
+  - Discarded before any live prediction: an Elo-HFA challenger
+    (ELO_HOME_ADV=28.53). ELO_HOME_ADV enters only the Elo update, not the
+    features, so it changed 0/240 picks (max prob diff 0.0037). Lesson: the
+    home bias lives in the LR intercept.
+- **features.py change:** 5 2026 international venues added to
+  STADIUM_GEO (MEL00, RIO00, PAR00, MAD01, MUN01). The 2002–2025 rebuild is
+  byte-identical (`scripts/phase10_canonical_rebuild.py`).
+- **Live features:** `src/live_features.py` builds rows for unplayed games
+  without touching features.py logic. Gates: 2002–2025 == canonical;
+  check 1 on all 2026 rows; placeholder invariance; masked-week equivalence
+  (the unplayed path equals the played path exactly).
+- **Leakage check 4:** the away_def_epa_early_ewm false positive is encoded as
+  an exact-count exception (168/269 → 170/269). `python -m src.leakage_checks`
+  now exits 0; it fails loudly on any drift or any other feature tripping.
+- **Rules (see prereg):** bet 1u where edge vs vig-free implied ≥ 0.04 at the
+  prediction-snapshot price; ties void. Checkpoint after week 9 (88 games):
+  swap only if mean LL diff < −0.010 AND one-sided paired t p < 0.05.
+  Season-end "edge" only if official mean bet CLV > 0 with one-sided p < 0.05;
+  ROI never counts. The edge-bucket breakdown is descriptive only.
+- **Weekly (owner runs):** Wed refresh + `predict_week --live`
+  (snapshot must be ≤6 h old); Sun refresh before 09:30 ET (06:30 PT); Tue
+  refresh + `grade_week --live` + `scorecard --live`; commit + push each time.
+- Official predictions are write-once and never edited; grading and scorecard
+  bugs are fixed in code and regenerated.

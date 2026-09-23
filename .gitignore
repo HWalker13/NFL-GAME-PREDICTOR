@@ -15,6 +15,10 @@ data/raw/snapshots/.*.tmp
 !data/raw/pull_metadata.json
 !data/processed/.gitkeep
 !models/.gitkeep
+# Phase 10: the frozen 2026 live models are the pre-registered artifacts
+# (sha256 in docs/PHASE10_PREREG.md) -- tracked so they cannot be lost.
+!models/live_2026_champion.joblib
+!models/live_2026_challenger_calibrated.joblib
 
 # Python bytecode / caches
 __pycache__/
@@ -24,3 +28,7 @@ __pycache__/
 
 # Phase 9 data-layer spike: scratch pulls/rebuilds (never the canonical cache)
 data/phase9_scratch/
+
+# Phase 10: live-script scratch output (dry runs, tests). The official record
+# is data/live/ (tracked) -- written only with --live, by the owner.
+data/live_scratch/

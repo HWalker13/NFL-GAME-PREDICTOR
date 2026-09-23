@@ -204,6 +204,13 @@ STADIUM_GEO: dict[str, dict] = {
     "TAM00": {"name": "Raymond James Stadium",     "lat": 27.976, "lon": -82.503, "tz": "America/New_York"},
     "VEG00": {"name": "Allegiant Stadium",         "lat": 36.091, "lon": -115.184, "tz": "America/Los_Angeles"},
     "WAS00": {"name": "Commanders Field",          "lat": 38.908, "lon": -76.864, "tz": "America/New_York"},
+    # Phase 10: 2026 international venues, first used in 2026 (absent from every
+    # 2002-2025 schedule, so the canonical 2002-2025 features are unchanged).
+    "MEL00": {"name": "Melbourne Cricket Ground",  "lat": -37.820, "lon": 144.983, "tz": "Australia/Melbourne"},
+    "RIO00": {"name": "Maracana Stadium",          "lat": -22.912, "lon": -43.230, "tz": "America/Sao_Paulo"},
+    "PAR00": {"name": "Stade de France",           "lat": 48.924, "lon": 2.360,   "tz": "Europe/Paris"},
+    "MAD01": {"name": "Santiago Bernabeu",         "lat": 40.453, "lon": -3.688,  "tz": "Europe/Madrid"},
+    "MUN01": {"name": "Allianz Arena (FC Bayern Munich Stadium)", "lat": 48.219, "lon": 11.625, "tz": "Europe/Berlin"},
 }
 
 
