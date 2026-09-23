@@ -1,0 +1,34 @@
+{
+  "pbp_2026.parquet": {
+    "library": "nflreadpy",
+    "library_version": "0.1.5",
+    "pulled_at_utc": "2026-09-23T03:09:11Z",
+    "rows": 5489,
+    "sha256": "852c9f2bd63851f700525095917d8584000546a275f608f4e5460efcdf74ce24"
+  },
+  "schedules_2026.parquet": {
+    "library": "nflreadpy",
+    "library_version": "0.1.5",
+    "pulled_at_utc": "2026-09-23T03:09:12Z",
+    "rows": 272,
+    "sha256": "cdaf0cecdfe50ef3b55ab7388408b70f3d4be923c03cceb137bd8d542ccc94b7"
+  },
+  "snapshots/schedules_2026_20260908T182732Z.parquet": {
+    "library": "nfl_data_py",
+    "library_version": "0.3.3",
+    "note": "byte-identical copy of the pre-Phase 9 cache file, preserved before the first --refresh-season 2026 overwrites it (only record of early-Sept 2026 lines)",
+    "pulled_at_precision": "approximate (mtime)",
+    "pulled_at_utc": "2026-09-08T18:27:32Z",
+    "rows": 272,
+    "sha256": "613ead130c599557b8becdd44153c7cd848ed95c2012f0547b21e2146f83b7fa",
+    "snapshot_of": "schedules_2026.parquet"
+  },
+  "snapshots/schedules_2026_20260923T030912Z.parquet": {
+    "library": "nflreadpy",
+    "library_version": "0.1.5",
+    "pulled_at_utc": "2026-09-23T03:09:12Z",
+    "rows": 272,
+    "sha256": "cdaf0cecdfe50ef3b55ab7388408b70f3d4be923c03cceb137bd8d542ccc94b7",
+    "snapshot_of": "schedules_2026.parquet"
+  }
+}
