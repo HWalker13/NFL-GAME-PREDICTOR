@@ -7,6 +7,12 @@ data/raw/*
 data/processed/*
 models/*
 !data/raw/.gitkeep
+# Phase 9: schedule snapshots are irreplaceable (upstream overwrites lines in
+# place) -- commit them. `data/raw/*` (not `data/raw/`) is what lets this
+# re-include work. Publish-time temp files stay ignored.
+!data/raw/snapshots/
+data/raw/snapshots/.*.tmp
+!data/raw/pull_metadata.json
 !data/processed/.gitkeep
 !models/.gitkeep
 
@@ -15,3 +21,6 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
+
+# Phase 9 data-layer spike: scratch pulls/rebuilds (never the canonical cache)
+data/phase9_scratch/

@@ -403,3 +403,44 @@ frozen), no new data pulls.
   all branches tested via `scripts/test_phase8_gate.py` without running the
   evaluation. Standing rule added above: the owner executes one-shot
   evaluations.
+
+## Phase 9 — Data-layer spike + in-season ingest (2026-09-22)
+
+Full record: `docs/PHASE9_DATA_LAYER.md`. No training, no feature changes.
+- Both nfl_data_py 0.3.3 and nflreadpy 0.1.5 pull 2026 (weeks 1-2 pbp complete,
+  week 3 lines populated).
+- Equivalence gate PASSED: nflreadpy-sourced rebuild of game_features.parquet
+  and team_game_log.parquet is byte-identical (sha256 747afbf4… / d09ef463…) to
+  canonical. Upstream pbp assets 2002-2025 all predate the 2026-09-08 cache.
+  -> data_ingest.py MIGRATED to nflreadpy (owner's pre-set rule).
+- Owner-confirmed judgement call: the naive swap crashed features.py on
+  int32 vs int64 keys; src/nflreadpy_boundary.py restores nfl_data_py's
+  dtype contract (int64 schedules ints, float32 pbp floats, int64 pbp
+  season). No values changed. Rationale: the gate is on the feature output
+  (byte-identical), features.py is untouched, and int32->int64 widening is
+  lossless -- this is the boundary conversion SPEC Phase 9 calls for.
+- Never install pyarrow in the venv (switches pandas' parquet engine
+  project-wide); fastparquet now pinned explicitly.
+- In-season: `python -m src.data_ingest --refresh-season 2026` re-pulls only
+  the in-progress season and writes an immutable read-only snapshot to
+  data/raw/snapshots/; pull metadata in data/raw/pull_metadata.json.
+  Completed seasons are never re-pulled without --force; do not --force them
+  without re-running scripts/phase9_equivalence.py (upstream history mutates).
+  The owner runs the refresh.
+- Upstream lines mutate in place (~1/3 of 2026 spreads changed Sep 8 -> Sep
+  23), which strengthens the Phase 7 caveat: historical line columns are most
+  likely latest/closing values. Snapshots are the only record of
+  time-specific lines and are irreplaceable. data/raw/snapshots/ is tracked in
+  git (.gitignore re-include). The Sep 8 pre-season schedules_2026.parquet was
+  preserved, byte-identical, as
+  snapshots/schedules_2026_20260908T182732Z.parquet (pull time = file mtime,
+  labelled "approximate (mtime)" in pull_metadata.json).
+- Leakage checks unchanged: 1/Elo/2/3 PASS, check 4 = the documented
+  away_def_epa_early_ewm false positive (0.6245 -> 0.6320).
+- nfl_data_py stays installed and in requirements.txt through the 2026 season
+  as the rollback path; removal is a post-season decision.
+- **Phase 10 prerequisite (not fixed in Phase 9):** Leakage check 4 exits 1 on
+  every run due to the documented away_def_epa_early_ewm false positive.
+  Before Phase 10, encode the known exception with its expected values
+  (0.6245 -> 0.6320) so the check passes on an exact match and fails on any
+  change -- a check that always fails trains the owner to ignore failures.

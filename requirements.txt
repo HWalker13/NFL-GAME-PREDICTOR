@@ -15,3 +15,19 @@ jupyter==1.1.1
 matplotlib==3.11.1
 seaborn==0.13.2
 joblib==1.6.0
+
+# Phase 9 (2026-09-22): src/data_ingest.py migrated to nflreadpy after the
+# 2002-2025 equivalence test rebuilt game_features.parquet byte-identically
+# (docs/PHASE9_DATA_LAYER.md). polars is pinned because
+# src/nflreadpy_boundary.py converts polars -> pandas column by column.
+# pyarrow is deliberately NOT installed: it would switch pandas'
+# read_parquet(engine='auto') from fastparquet to pyarrow project-wide.
+nflreadpy==0.1.5
+polars==1.44.2
+# The project's parquet engine. Previously arrived only transitively via
+# nfl_data_py; pinned explicitly so every existing parquet file keeps being
+# read/written by the same engine whatever happens to nfl_data_py.
+fastparquet==2026.5.0
+# nfl_data_py above is no longer imported by src/; kept for the cached
+# 2002-2025 provenance and scripts/phase9_probe_2026.py. Removing it (and
+# with it the numpy<2 / pandas<2 pins) is a separate owner decision.
