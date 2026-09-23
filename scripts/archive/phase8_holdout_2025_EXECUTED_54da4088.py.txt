@@ -1,0 +1,304 @@
+"""Phase 8, Part D: the ONE-TIME 2025 full-season holdout evaluation, exactly
+as pre-registered in docs/PHASE8_PREREG.md.
+
+Protocol (fixed by the pre-registration; nothing is chosen here):
+  - Target season T (2025 for the real run). For each of the four models:
+    OOF walk-forward sigmoid calibrator from seasons T-5..T-1, final model
+    trained on all seasons <= T-1 with frozen saved hyperparameters
+    (src/calibration.py).
+  - Each model is scored "as deployed": raw or calibrated per the Part A
+    decision rule on 2022 (PART_A_DECISIONS below, asserted against
+    data/processed/phase8_dev_2022.json). The other version is reported as a
+    descriptive secondary number only.
+  - Metrics: accuracy (primary; pick = as-deployed prob > 0.5), log loss,
+    Brier, ROC-AUC, reliability table, home baseline, pairwise exact McNemar.
+  - Pre-stated interpretation bands on LR-tuned accuracy, and the
+    deployment-model confirmation rule, applied mechanically.
+  - Vegas benchmark + disagreement analysis, identical conventions to
+    Phase 7 (scripts/vegas_benchmark_2023_2024.py). DESCRIPTIVE ONLY.
+
+Guards for the real run (--season 2025):
+  - refuses unless docs/PHASE8_PREREG.md contains "**Status:** APPROVED";
+  - refuses if data/processed/holdout_2025_predictions.parquet already
+    exists (run once, whatever the result -- no re-runs after changes);
+  - records the SHA-256 of this script and of the pre-registration.
+
+Dry run (--season 2022): exercises the identical code path on the 2022
+validation season and asserts the raw numbers reproduce Part A / the saved
+val_metrics. Writes to a separate, clearly named dry-run file.
+
+Usage::
+
+    python -m scripts.phase8_holdout_2025 --season 2022   # dry run
+    python -m scripts.phase8_holdout_2025 --season 2025   # the real, one-time run
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from datetime import datetime, timezone
+from math import comb
+
+import joblib
+import numpy as np
+import pandas as pd
+from scipy.stats import binomtest, ttest_1samp
+
+from scripts.vegas_benchmark_2023_2024 import american_to_prob, wilson_ci
+from src import calibration as C, evaluate as E, leakage_checks as LC, train_winner as TW
+
+HOLDOUT_SEASON = 2025
+PREREG = TW.PROJECT_ROOT / "docs" / "PHASE8_PREREG.md"
+APPROVED_MARKER = "**Status:** APPROVED"
+
+# Part A decision rule outcome on 2022 (calibrated log loss <= raw? -> calibrated).
+PART_A_DECISIONS = {"LR-untuned": "raw", "LR-tuned": "raw", "RandomForest": "raw", "HGB-tuned": "raw"}
+DEPLOY_BASE = "LR-tuned"
+LOG_LOSS_MARGIN = 0.010
+LOG_LOSS_ALPHA = 0.05  # one-sided paired t-test on per-game log-loss differences
+MCNEMAR_ALPHA = 0.05
+
+
+def sha256(path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def out_paths(season: int):
+    if season == HOLDOUT_SEASON:
+        return (TW.PROC_DIR / "holdout_2025_predictions.parquet",
+                TW.PROC_DIR / "holdout_2025_run_record.json")
+    return (TW.PROC_DIR / f"phase8_dryrun_{season}_predictions.parquet",
+            TW.PROC_DIR / f"phase8_dryrun_{season}_run_record.json")
+
+
+def band(acc: float, n: int) -> str:
+    """Pre-registered LR-tuned accuracy bands (exhaustive, count-based)."""
+    k = round(acc * n)
+    if k / n > 0.70:
+        return "ABOVE 70% -- SPEC 5.6 protocol required BEFORE reporting as a result"
+    if k / n > 0.68:
+        return "68-70% -- above the 2023-24 range, below the 5.6 trigger: report with explicit caution"
+    if k / n >= 0.58:
+        return "58-68% -- consistent with 2023-2024; pipeline generalizes"
+    if k / n >= 0.50:
+        return "50-58% -- flag possible drift/regime change; report honestly; investigate later, change nothing now"
+    return "BELOW 50% -- below chance: treat as a suspected pipeline bug; do not report as a model result"
+
+
+def per_game_log_loss(y: np.ndarray, p: np.ndarray) -> np.ndarray:
+    p = np.clip(p, 1e-15, 1 - 1e-15)
+    return -(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+
+def mcnemar(y, a, b) -> tuple[float, int, int]:
+    ca, cb = a == y, b == y
+    n10, n01 = int((ca & ~cb).sum()), int((~ca & cb).sum())
+    n = n10 + n01
+    return (1.0 if n == 0 else binomtest(n10, n, 0.5).pvalue), n10, n01
+
+
+def vegas_section(df: pd.DataFrame, season: int, models: list[str]) -> dict:
+    """Phase 7 conventions: favorite from spread_line, moneyline fallback on a
+    pick'em, unresolved excluded; vig-free implied prob from moneylines."""
+    sched = E.completed_regular_season(E.load_schedules())
+    sched = sched[sched["season"] == season]
+    v = df.merge(sched[["game_id", "spread_line", "home_moneyline", "away_moneyline", "result"]],
+                 on="game_id", how="left", validate="1:1")
+    assert v["result"].notna().all() and (v["home_win"] == (v["result"] > 0)).all()
+    line_nulls = v[["spread_line", "home_moneyline", "away_moneyline"]].isna().sum()
+    print(f"\nline nulls: {line_nulls.to_dict()}")
+    v = v.dropna(subset=["spread_line", "home_moneyline", "away_moneyline"])
+    rh, ra = american_to_prob(v["home_moneyline"]), american_to_prob(v["away_moneyline"])
+    v["vegas_proba"] = rh / (rh + ra)
+    fav = np.sign(v["spread_line"])
+    ml_fav = np.sign(v["away_moneyline"] - v["home_moneyline"])
+    v["vegas_fav"] = np.where(fav != 0, fav, ml_fav)
+    print(f"games with lines: {len(v)}; spread==0: {int((fav == 0).sum())}; "
+          f"unresolved after ML fallback: {int((v.vegas_fav == 0).sum())}; "
+          f"mean overround {float((rh + ra - 1).mean()):.4f}")
+    y = v["home_win"].to_numpy()
+    res = v["vegas_fav"].to_numpy() != 0
+    vp = (v["vegas_fav"].to_numpy() > 0).astype(int)
+    k = int((vp[res] == y[res]).sum())
+    lo, hi = wilson_ci(k, int(res.sum()))
+    vm = C.metrics(y, v["vegas_proba"].to_numpy())
+    print(f"Vegas favorite: {k}/{int(res.sum())} = {k / res.sum():.4f} (95% Wilson {lo:.4f}-{hi:.4f})")
+    print(f"Vegas implied (vig-free): acc={vm['accuracy']:.4f} log_loss={vm['log_loss']:.4f} "
+          f"brier={vm['brier_score']:.4f} auc={vm['roc_auc']:.4f}")
+    rows = []
+    for name in models:
+        mp = v[f"pred_{name}"].to_numpy()[res]
+        yr, vr = y[res], vp[res]
+        dis = mp != vr
+        nd, kd = int(dis.sum()), int((mp[dis] == yr[dis]).sum())
+        dlo, dhi = wilson_ci(kd, nd)
+        rows.append({"model": name, "agree_n": int((~dis).sum()),
+                     "agree_acc": float((mp[~dis] == yr[~dis]).mean()),
+                     "disagree_n": nd, "model_right": kd, "vegas_right": nd - kd,
+                     "model_acc_on_disagree": kd / nd if nd else np.nan, "ci95_lo": dlo, "ci95_hi": dhi,
+                     "mcnemar_p": binomtest(kd, nd, 0.5).pvalue if nd else np.nan})
+    at = pd.DataFrame(rows).set_index("model")
+    print("\nAgreement analysis vs Vegas favorite (DESCRIPTIVE ONLY):")
+    print(at.to_string(float_format=lambda x: f"{x:.4f}"))
+    return {"vegas_favorite_acc": k / res.sum(), "vegas_favorite_n": int(res.sum()),
+            "vegas_implied": vm, "agreement": at.reset_index().to_dict(orient="records"),
+            "per_game": v[["game_id", "spread_line", "home_moneyline", "away_moneyline", "vegas_proba"]]}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--season", type=int, required=True)
+    season = ap.parse_args().season
+    pred_path, record_path = out_paths(season)
+    script_path = TW.PROJECT_ROOT / "scripts" / "phase8_holdout_2025.py"
+
+    if season == HOLDOUT_SEASON:
+        if not PREREG.exists() or APPROVED_MARKER not in PREREG.read_text():
+            print(f"REFUSING: {PREREG.name} is not marked '{APPROVED_MARKER}'.")
+            return 2
+        if pred_path.exists() or record_path.exists():
+            print(f"REFUSING: {pred_path.name} already exists -- the 2025 holdout runs once.")
+            return 2
+    elif season != 2022:
+        print("only --season 2022 (dry run) or --season 2025 (real run) are allowed")
+        return 2
+
+    dev = json.loads((TW.PROC_DIR / "phase8_dev_2022.json").read_text())["decisions"]
+    assert dev == PART_A_DECISIONS, f"Part A decisions changed on disk: {dev}"
+
+    print(f"=== Phase 8 {'HOLDOUT' if season == HOLDOUT_SEASON else 'DRY RUN'}: season {season} ===")
+    print(f"script sha256 {sha256(script_path)}")
+    if PREREG.exists():
+        print(f"prereg sha256 {sha256(PREREG)}")
+    frame = C.load_frame(season)
+    assert frame["season"].max() == season
+    pipes, feature_cols = C.load_frozen_models()
+    target = frame[frame["season"] == season]
+    y = target["home_win"].to_numpy()
+    print(f"n={len(y)}; OOF calibration seasons {season - C.N_OOF_SEASONS}-{season - 1}; "
+          f"final models trained on {frame.season.min()}-{season - 1} "
+          f"(n={int((frame.season < season).sum()):,})")
+
+    # Point-in-time Elo check (reads final scores -- only possible post-approval for 2025).
+    LC.check_elo_point_in_time(frame, E.load_schedules())
+
+    out = target[["game_id", "season", "week", "home_win"]].reset_index(drop=True)
+    calibrators, results = {}, {}
+    for name, unfitted in pipes.items():
+        preds, cal, _ = C.calibrate_for_season(unfitted, frame, season, feature_cols)
+        assert (preds["game_id"].to_numpy() == out["game_id"].to_numpy()).all()
+        out[f"proba_raw_{name}"] = preds["proba_raw"].to_numpy()
+        out[f"proba_cal_{name}"] = preds["proba_cal"].to_numpy()
+        dep = "proba_cal" if PART_A_DECISIONS[name] == "calibrated" else "proba_raw"
+        out[f"proba_{name}"] = preds[dep].to_numpy()
+        out[f"pred_{name}"] = (out[f"proba_{name}"] > 0.5).astype(int)
+        calibrators[name] = {"slope": cal.slope, "intercept": cal.intercept, "n_fit": cal.n_fit}
+        results[name] = {"as_deployed": PART_A_DECISIONS[name],
+                         "raw": C.metrics(y, preds["proba_raw"].to_numpy()),
+                         "calibrated": C.metrics(y, preds["proba_cal"].to_numpy())}
+        if season == 2022:  # dry-run reproduction gate
+            saved = joblib.load(TW.MODELS_DIR / C.SAVED_MODELS[name])["val_metrics"]
+            assert abs(results[name]["raw"]["log_loss"] - saved["log_loss"]) < 1e-9, name
+            assert abs(results[name]["raw"]["accuracy"] - saved["accuracy"]) < 1e-9, name
+
+    base = E.home_baseline_accuracy(E.load_schedules(), [season])
+    assert base["n_games"] == len(y), "home baseline n != evaluated games"
+    print(f"\nhome baseline: {base['home_wins']}/{base['n_games']} = {base['baseline_accuracy']:.4f}")
+
+    rows = []
+    for name, r in results.items():
+        dep = r["as_deployed"]
+        rows.append({"model": name, "version": f"{dep} (as deployed)", **r[dep]})
+        other = "calibrated" if dep == "raw" else "raw"
+        rows.append({"model": name, "version": f"{other} (descriptive)", **r[other]})
+    tbl = pd.DataFrame(rows).set_index(["model", "version"])
+    print(f"\n=== Season {season} metrics ===")
+    print(tbl.to_string(float_format=lambda v: f"{v:.4f}"))
+    for name in pipes:
+        acc = results[name][PART_A_DECISIONS[name]]["accuracy"]
+        k = round(acc * len(y))
+        lo, hi = wilson_ci(k, len(y))
+        print(f"  {name:<13} {k}/{len(y)} = {acc:.4f}  95% Wilson {lo:.4f}-{hi:.4f}"
+              f"  vs baseline {acc - base['baseline_accuracy']:+.4f}")
+    print("\ncalibrators (slope < 1 = raw overconfident; intercept < 0 = shifts toward away):")
+    for name, c in calibrators.items():
+        print(f"  {name:<13} slope={c['slope']:.4f} intercept={c['intercept']:+.4f} n_fit={c['n_fit']}")
+
+    print("\n=== Reliability (as-deployed probabilities) ===")
+    for name in pipes:
+        print(f"\n{name}")
+        print(C.reliability_table(y, out[f"proba_{name}"].to_numpy())
+              .to_string(index=False, float_format=lambda v: "-" if pd.isna(v) else f"{v:.3f}"))
+
+    print("\n=== Pairwise exact McNemar (as-deployed picks) ===")
+    names = list(pipes)
+    mcn = {}
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            p, n10, n01 = mcnemar(y, out[f"pred_{a}"].to_numpy(), out[f"pred_{b}"].to_numpy())
+            mcn[f"{a} vs {b}"] = {"p": p, "a_right_b_wrong": n10, "a_wrong_b_right": n01}
+            print(f"  {a:<13} vs {b:<13} p={p:.4f}  discordant={n10 + n01} ({a} only right={n10}, {b} only right={n01})")
+
+    stop = False
+    print("\n=== Pre-registered checks ===")
+    for name in pipes:
+        acc = results[name][PART_A_DECISIONS[name]]["accuracy"]
+        if acc > TW.SUSPICIOUS_ACCURACY:
+            stop = True
+            print(f"!! {name} accuracy {acc:.4f} > 0.70 -- SPEC 5.6 STOP: do not report as a result.")
+    lr_acc = results[DEPLOY_BASE][PART_A_DECISIONS[DEPLOY_BASE]]["accuracy"]
+    verdict = band(lr_acc, len(y))
+    print(f"LR-tuned accuracy {lr_acc:.4f} -> band: {verdict}")
+
+    base_ll = results[DEPLOY_BASE][PART_A_DECISIONS[DEPLOY_BASE]]["log_loss"]
+    base_ll_vec = per_game_log_loss(y, out[f"proba_{DEPLOY_BASE}"].to_numpy())
+    qualifiers, deploy_rule = [], {}
+    for name in names:
+        if name == DEPLOY_BASE:
+            continue
+        r = results[name][PART_A_DECISIONS[name]]
+        key = f"{DEPLOY_BASE} vs {name}" if f"{DEPLOY_BASE} vs {name}" in mcn else f"{name} vs {DEPLOY_BASE}"
+        p = mcn[key]["p"]
+        by_acc = p < MCNEMAR_ALPHA and r["accuracy"] > lr_acc
+        # (b): mean paired per-game log-loss difference (challenger - LR-tuned)
+        # must be < -0.010 AND a one-sided paired t-test (H1: mean < 0) must
+        # give p < 0.05.
+        d = per_game_log_loss(y, out[f"proba_{name}"].to_numpy()) - base_ll_vec
+        assert abs(d.mean() - (r["log_loss"] - base_ll)) < 1e-9, "per-game log loss != sklearn log_loss"
+        t_p = float(ttest_1samp(d, 0.0, alternative="less").pvalue)
+        by_ll = d.mean() < -LOG_LOSS_MARGIN and t_p < LOG_LOSS_ALPHA
+        print(f"  challenger {name:<13} acc {r['accuracy']:.4f} (McNemar p={p:.4f}) -> beats on accuracy: {by_acc}; "
+              f"log loss {r['log_loss']:.4f} vs {base_ll:.4f}: mean diff {d.mean():+.4f} "
+              f"(SE {d.std(ddof=1) / np.sqrt(len(d)):.4f}; needs < -{LOG_LOSS_MARGIN:.3f}), "
+              f"one-sided paired t p={t_p:.4f} (needs < {LOG_LOSS_ALPHA}) -> beats on log loss: {by_ll}")
+        deploy_rule[name] = {"accuracy": r["accuracy"], "mcnemar_p": p, "qualifies_a": bool(by_acc),
+                             "log_loss": r["log_loss"], "mean_ll_diff": float(d.mean()),
+                             "ttest_p_one_sided": t_p, "qualifies_b": bool(by_ll)}
+        if by_acc or by_ll:
+            qualifiers.append((r["log_loss"], name))
+    deploy = min(qualifiers)[1] if qualifiers else DEPLOY_BASE
+    print(f"deployment model: {deploy} "
+          f"({'LR-tuned confirmed -- no challenger met the rule' if not qualifiers else 'challenger(s) qualified: ' + str([q[1] for q in qualifiers])})")
+
+    print("\n=== Vegas benchmark (DESCRIPTIVE ONLY -- no decision may use it) ===")
+    vegas = vegas_section(out, season, names)
+    out = out.merge(vegas.pop("per_game"), on="game_id", how="left")
+
+    out.to_parquet(pred_path, index=False)
+    record = {"season": season, "run_utc": datetime.now(timezone.utc).isoformat(),
+              "script_sha256": sha256(script_path),
+              "prereg_sha256": sha256(PREREG) if PREREG.exists() else None,
+              "part_a_decisions": PART_A_DECISIONS, "calibrators": calibrators, "results": results,
+              "home_baseline": base, "mcnemar": mcn, "lr_tuned_band": verdict,
+              "deployment_rule": deploy_rule, "deployment_model": deploy, "spec56_stop": stop,
+              "vegas": {k: v for k, v in vegas.items()}}
+    record_path.write_text(json.dumps(record, indent=2, default=float))
+    print(f"\nwrote {pred_path.relative_to(TW.PROJECT_ROOT)} and {record_path.relative_to(TW.PROJECT_ROOT)}")
+    return 3 if stop else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
