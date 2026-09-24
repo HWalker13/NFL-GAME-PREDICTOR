@@ -196,7 +196,8 @@ source venv/bin/activate
 ```bash
 python -m src.data_ingest --refresh-season 2026
 python -m scripts.live.predict_week --season 2026 --week N --live
-git add data/raw/snapshots data/raw/pull_metadata.json data/live/2026/predictions
+python -m scripts.live.readable_week --season 2026 --week N --live
+git add data/raw/snapshots data/raw/pull_metadata.json data/live/2026/predictions docs/live/week_NN_picks.md
 git commit -m "Phase 10: week N predictions (official)"
 git push
 ```
@@ -216,7 +217,8 @@ git push
 python -m src.data_ingest --refresh-season 2026
 python -m scripts.live.grade_week --season 2026 --week N --live
 python -m scripts.live.scorecard --season 2026 --live
-git add data/raw/snapshots data/raw/pull_metadata.json data/live/2026/graded docs/live/SCORECARD_2026.md
+python -m scripts.live.readable_week --season 2026 --week N --live
+git add data/raw/snapshots data/raw/pull_metadata.json data/live/2026/graded docs/live/SCORECARD_2026.md docs/live/week_NN_picks.md
 git commit -m "Phase 10: week N graded + scorecard"
 git push
 ```
@@ -287,3 +289,5 @@ Each official run also records `predict_week.py` / `common.py` hashes in its `we
 ## Amendments
 
 **Amendment 1 (2026-09-23, owner):** first official week changed from 4 to 3. Made before any official prediction exists and before any week-3 outcome exists. Reason: the build finished earlier than planned; the prediction path (the only irreversible step) was dry-run on week 3 in scratch with all guards passing; grading and scorecard are regenerable by design, so untested settlement cannot damage the official record. Week 3 counts toward the official record and the season-end verdict. The midseason checkpoint window is UNCHANGED: weeks 4-9, 88 games. Code change with this amendment: scripts/live/scorecard.py -- constant FIRST_LIVE_WEEK renamed to CHECKPOINT_FIRST_WEEK and checkpoint wording updated; checkpoint logic unchanged (weeks 4-9). Appendix B hashes record drafting time and are intentionally not updated.
+
+**Amendment 2 (2026-09-23, owner):** adds a derived, regenerable readable page per week (`scripts/live/readable_week.py` → `docs/live/week_NN_picks.md`). No rule, model, prediction, or grading change. The page is a plain-English view of the official record for readers without a betting or statistics background: it reads `week_NN_predictions.csv` (and `week_NN_graded.csv` once it exists), refuses if the predictions file no longer matches the sha256 in `week_NN_run.json` or if the graded file does not grade exactly the logged rows, and never writes under `data/live/`. Like the scorecard, it is regenerated rather than edited, and it is not itself the record. Section 7's Wednesday and Tuesday routines now run it after `predict_week` and after `scorecard` respectively. Made after week 3's official predictions were logged and before any week-3 outcome exists; it cannot affect any logged prediction, bet, grade, or decision.
