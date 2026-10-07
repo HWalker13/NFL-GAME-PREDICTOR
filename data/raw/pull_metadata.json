@@ -2,16 +2,16 @@
   "pbp_2026.parquet": {
     "library": "nflreadpy",
     "library_version": "0.1.5",
-    "pulled_at_utc": "2026-10-01T19:02:48Z",
-    "rows": 8311,
-    "sha256": "18182ac0bc49f37b4113c8e81d7b12c3fc01d701a16b5c3db901f655cbd73eeb"
+    "pulled_at_utc": "2026-10-07T18:22:40Z",
+    "rows": 11155,
+    "sha256": "2e66104ea453870c314c09877f2630c60339609d911ce2232b1d4ed8f718eb47"
   },
   "schedules_2026.parquet": {
     "library": "nflreadpy",
     "library_version": "0.1.5",
-    "pulled_at_utc": "2026-10-01T19:02:48Z",
+    "pulled_at_utc": "2026-10-07T18:22:41Z",
     "rows": 272,
-    "sha256": "fe7f6e03a1e9a0b61e28dac04db10351409fe4ad468233417b7b822aa9e063e3"
+    "sha256": "e1a9c389bd19a858400c01b532f2e3b113ff13d37cb4ad326aed52209e1edc36"
   },
   "snapshots/schedules_2026_20260908T182732Z.parquet": {
     "library": "nfl_data_py",
@@ -69,6 +69,14 @@
     "pulled_at_utc": "2026-10-01T19:02:48Z",
     "rows": 272,
     "sha256": "fe7f6e03a1e9a0b61e28dac04db10351409fe4ad468233417b7b822aa9e063e3",
+    "snapshot_of": "schedules_2026.parquet"
+  },
+  "snapshots/schedules_2026_20261007T182241Z.parquet": {
+    "library": "nflreadpy",
+    "library_version": "0.1.5",
+    "pulled_at_utc": "2026-10-07T18:22:41Z",
+    "rows": 272,
+    "sha256": "e1a9c389bd19a858400c01b532f2e3b113ff13d37cb4ad326aed52209e1edc36",
     "snapshot_of": "schedules_2026.parquet"
   }
 }
