@@ -410,6 +410,28 @@ class TestGrade(unittest.TestCase):
         self.assertEqual((g.at["mon", "result"], g.at["mon", "bet_outcome"]), ("pending", "none"))
         self.assertEqual(g.at["mon", "clv_status"], G.CLV_NO_LINE_PRED)
 
+    def test_clv_min_gap_amendment_3(self):
+        # A later snapshot counts only if >= 6 h after the prediction snapshot
+        # (and before kickoff); otherwise excluded, never scored as 0.
+        line = [{"game_id": "a", "home_moneyline": -150, "away_moneyline": 130}]
+        base = dict(season=2026, week=4, model="champion", game_id="a", kickoff_utc="2026-10-04T17:00:00Z",
+                    p_home=0.6, pick="home", spread_line=3.0, home_moneyline=-120, away_moneyline=100,
+                    implied_p_home=0.52, paper_bet="home", bet_price=-120.0, stake=1.0)
+        for late_ts, want in [("20260930T150200Z", G.CLV_TOO_SOON),       # 2 minutes later (week 4's case)
+                              ("20260930T205959Z", G.CLV_TOO_SOON),       # 5h59m59s
+                              ("20260930T210000Z", G.CLV_MEASURED)]:      # exactly 6 h counts
+            d = _tmpdir(self)
+            pred_snap = _snap(d, "20260930T150000Z", line)
+            late = _snap(d, late_ts, line)
+            pred = pd.DataFrame([dict(base, snapshot_file=pred_snap.name)])
+            g = G.grade(pred, [pred_snap, late], late, pd.Timestamp("2026-10-05")).iloc[0]
+            self.assertEqual(g["clv_status"], want, late_ts)
+            if want == G.CLV_TOO_SOON:
+                self.assertTrue(np.isnan(g["bet_clv"]) and np.isnan(g["line_move_toward_model"]))
+                self.assertTrue(np.isnan(g["p_late_home"]))
+            else:
+                self.assertAlmostEqual(g["bet_clv"], (150 / 250) / (150 / 250 + 100 / 230) - 0.52)
+
     def test_log_loss_and_brier(self):
         d = _tmpdir(self)
         s = _snap(d, "20260930T150000Z", [{"game_id": "a", "home_moneyline": -110, "away_moneyline": -110,

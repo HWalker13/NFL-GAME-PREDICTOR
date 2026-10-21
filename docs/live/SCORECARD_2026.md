@@ -1,6 +1,6 @@
 # 2026 shadow-mode scorecard
 
-_Generated 2026-10-21T21:34:53Z from 4 graded week file(s): 3, 4, 5, 6. Paper trading only -- no real money.
+_Generated 2026-10-21T22:10:12Z from 4 graded week file(s): 3, 4, 5, 6. Paper trading only -- no real money.
 Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged predictions are never edited._
 
 ## How to read this
@@ -43,9 +43,9 @@ Games logged: 61 (decided 60, tie 1, pending 0).
 
 | Model | Bets (home) | W-L-Void (pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n, excluded) | One-sided p (CLV>0) | Line move -> model [95% CI] (n) |
 |---|---:|---|---:|---|---|---:|---|
-| Champion | 43 (30) | 25-17-1 (0) | +15.05 | 0.358 [-0.095, 0.812] | 0.0000 [-0.0000, 0.0000] (n=11, excl 32) | 0.4078 | 0.0000 [-0.0000, 0.0000] (n=16) |
-| Challenger | 40 (25) | 24-15-1 (0) | +17.73 | 0.455 [-0.026, 0.935] | 0.0000 [-0.0000, 0.0000] (n=10, excl 30) | 0.1644 | 0.0000 [-0.0000, 0.0000] (n=16) |
-| Official record (bet_status = official) | 43 (30) | 25-17-1 (0) | +15.05 | 0.358 [-0.095, 0.812] | 0.0000 [-0.0000, 0.0000] (n=11, excl 32) | 0.4078 | – |
+| Champion | 43 (30) | 25-17-1 (0) | +15.05 | 0.358 [-0.095, 0.812] | – (n=0, excl 43) | – | – |
+| Challenger | 40 (25) | 24-15-1 (0) | +17.73 | 0.455 [-0.026, 0.935] | – (n=0, excl 40) | – | – |
+| Official record (bet_status = official) | 43 (30) | 25-17-1 (0) | +15.05 | 0.358 [-0.095, 0.812] | – (n=0, excl 43) | – | – |
 
 `Bets (home)` shows how many bets were on the home side: both models carry the known home-win bias (Phase 8 negative calibration intercepts), so a home-heavy bet mix is expected.
 
@@ -57,12 +57,12 @@ Edge = model probability minus vig-free implied probability for the side bet, at
 
 | Model | Edge bucket | Bets | W-L (void, pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n) | Sample |
 |---|---|---:|---|---:|---|---|---|
-| champion | [0.04, 0.06) | 10 | 5-4 (1, 0) | +0.46 | 0.051 [-0.774, 0.876] | -0.0000 [-0.0000, 0.0000] (n=2) | small sample (n<30) |
-| champion | [0.06, 0.08) | 7 | 6-1 (0, 0) | +8.12 | 1.160 [-0.821, 3.140] | -0.0000 (n=1) | small sample (n<30) |
-| champion | [0.08+) | 26 | 14-12 (0, 0) | +6.47 | 0.249 [-0.289, 0.787] | 0.0000 [-0.0000, 0.0000] (n=8) | small sample (n<30) |
-| challenger | [0.04, 0.06) | 11 | 7-4 (0, 0) | +1.85 | 0.168 [-0.491, 0.827] | 0.0000 [-0.0000, 0.0000] (n=2) | small sample (n<30) |
+| champion | [0.04, 0.06) | 10 | 5-4 (1, 0) | +0.46 | 0.051 [-0.774, 0.876] | – (n=0) | small sample (n<30) |
+| champion | [0.06, 0.08) | 7 | 6-1 (0, 0) | +8.12 | 1.160 [-0.821, 3.140] | – (n=0) | small sample (n<30) |
+| champion | [0.08+) | 26 | 14-12 (0, 0) | +6.47 | 0.249 [-0.289, 0.787] | – (n=0) | small sample (n<30) |
+| challenger | [0.04, 0.06) | 11 | 7-4 (0, 0) | +1.85 | 0.168 [-0.491, 0.827] | – (n=0) | small sample (n<30) |
 | challenger | [0.06, 0.08) | 5 | 2-2 (1, 0) | -0.35 | -0.086 [-1.902, 1.729] | – (n=0) | small sample (n<30) |
-| challenger | [0.08+) | 24 | 15-9 (0, 0) | +16.23 | 0.676 [-0.043, 1.395] | 0.0000 [-0.0000, 0.0000] (n=8) | small sample (n<30) |
+| challenger | [0.08+) | 24 | 15-9 (0, 0) | +16.23 | 0.676 [-0.043, 1.395] | – (n=0) | small sample (n<30) |
 
 ## Weekly
 
@@ -70,8 +70,8 @@ Edge = model probability minus vig-free implied probability for the side bet, at
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | 3 | champion | 16 | 0.625 | 0.6728 | 0.2400 | 0.688 | 0.500 | 11 | +3.22 | – (0) |
 | 3 | challenger | 16 | 0.625 | 0.6732 | 0.2404 | 0.688 | 0.500 | 9 | +3.92 | – (0) |
-| 4 | champion | 16 | 0.625 | 0.5955 | 0.2077 | 0.500 | 0.562 | 11 | +1.20 | 0.0000 (11) |
-| 4 | challenger | 16 | 0.625 | 0.5975 | 0.2070 | 0.500 | 0.562 | 10 | +3.18 | 0.0000 (10) |
+| 4 | champion | 16 | 0.625 | 0.5955 | 0.2077 | 0.500 | 0.562 | 11 | +1.20 | – (0) |
+| 4 | challenger | 16 | 0.625 | 0.5975 | 0.2070 | 0.500 | 0.562 | 10 | +3.18 | – (0) |
 | 5 | champion | 14 | 0.643 | 0.5661 | 0.1902 | 0.357 | 0.643 | 10 | +8.18 | – (0) |
 | 5 | challenger | 14 | 0.714 | 0.5712 | 0.1918 | 0.357 | 0.643 | 11 | +7.18 | – (0) |
 | 6 | champion | 14 | 0.500 | 0.7377 | 0.2711 | 0.429 | 0.643 | 11 | +2.45 | – (0) |
@@ -87,6 +87,6 @@ Not yet evaluable: graded checkpoint weeks [4, 5, 6], 0 pending game(s). The dec
 
 Rule (pre-registered): "evidence of an edge" ONLY if the official mean bet CLV > 0 with a one-sided t-test p < 0.05; the units ROI 95% CI is reported alongside. ROI alone never counts as evidence.
 
-Official bets with measured CLV: n = 11; mean CLV = 0.0000 [-0.0000, 0.0000]; one-sided p = 0.4078. Units ROI = 0.358 [-0.095, 0.812].
+Official bets with measured CLV: n = 0; mean CLV = –; one-sided p = –. Units ROI = 0.358 [-0.095, 0.812].
 
 **No evidence of an edge** under the rule (as of the games graded so far).

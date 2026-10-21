@@ -18,7 +18,10 @@ Line movement is measured to the **last pre-kickoff snapshot**: the latest
 snapshot taken strictly before that game's kickoff. It is NOT the closing
 line -- snapshots exist only when the owner refreshes. If that snapshot is
 not later than the prediction snapshot (e.g. Thursday games when nothing was
-pulled in between), CLV is excluded for that game and counted.
+pulled in between), CLV is excluded for that game and counted. Amendment 3
+(2026-10-21): it must also be at least MIN_CLV_GAP_HOURS after the prediction
+snapshot, else CLV and line movement are excluded (never scored as 0) --
+a snapshot minutes after the prediction one measures no market movement.
   bet CLV            = vig-free implied prob of the BET side, last pre-kickoff
                        snapshot minus prediction snapshot (positive = the line
                        moved toward the bet)
@@ -41,6 +44,11 @@ CLV_MEASURED = "measured"
 CLV_NO_LATER = "excluded: no pre-kickoff snapshot after the prediction snapshot"
 CLV_NO_LINE_PRED = "excluded: missing line at prediction"
 CLV_NO_LINE_LATE = "excluded: missing line in last pre-kickoff snapshot"
+CLV_TOO_SOON = "excluded: last pre-kickoff snapshot < 6 h after the prediction snapshot"
+
+# Amendment 3: minimum gap between the prediction snapshot and the snapshot
+# CLV is measured against.
+MIN_CLV_GAP_HOURS = 6.0
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -116,6 +124,8 @@ def grade(pred: pd.DataFrame, snapshots: list[Path], scores_snapshot: Path,
             g["clv_status"] = CLV_NO_LINE_PRED
         elif late is None or C.snapshot_time(late) <= pred_time:
             g["clv_status"] = CLV_NO_LATER
+        elif C.snapshot_time(late) - pred_time < pd.Timedelta(hours=MIN_CLV_GAP_HOURS):
+            g["clv_status"] = CLV_TOO_SOON
         else:
             ln = _lines(late, cache)
             hm = ln.at[r.game_id, "home_moneyline"] if r.game_id in ln.index else np.nan

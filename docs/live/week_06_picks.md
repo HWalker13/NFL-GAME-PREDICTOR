@@ -1,6 +1,6 @@
 # 2026 Week 6 -- model picks (with results)
 
-_Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 10/14 10:41 AM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-10-21T21:35:16Z._
+_Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 10/14 10:41 AM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-10-21T22:10:18Z._
 
 ## How to read this page
 
