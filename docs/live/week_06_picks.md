@@ -1,6 +1,6 @@
-# 2026 Week 6 -- model picks (before kickoff, no results yet)
+# 2026 Week 6 -- model picks (with results)
 
-_Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 10/14 10:41 AM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-10-14T17:42:17Z._
+_Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 10/14 10:41 AM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-10-21T21:35:16Z._
 
 ## How to read this page
 
@@ -37,25 +37,27 @@ _Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 
 ## This week
 
 - **14 games**, **11 official paper bets** (3 on the team the model does not pick to win, marked †).
+- Picks right so far: **7 of 14** decided games (0 not played yet, 0 ties).
+- Paper bets so far: **5 won, 6 lost**, 0 void; net **+2.45 units** (1 unit = the $1 risked per bet). One week says almost nothing about skill.
 
 ## Official picks (champion model)
 
-| Game | Kickoff (Pacific) | Model picks | Model's chance | Vegas favorite | Vegas's chance | Gap (pts) | Paper bet | If the bet wins |
-|---|---|---|---|---|---|---|---|---|
-| SEA @ DEN | Thu 10/15 5:15 PM | DEN | 54% | SEA by 2.5 | 44% | +10.4 | Bet DEN (+10.4 pts) | +$1.20 per $1 risked |
-| HOU @ JAX | Sun 10/18 6:30 AM | JAX | 62% | JAX by 2.5 | 56% | +5.5 | Bet JAX (+5.5 pts) | +$0.70 per $1 risked |
-| BAL @ CLE | Sun 10/18 10:00 AM | BAL | 72% | BAL by 5.5 | 70% | +2.1 | No bet | – |
-| CAR @ PHI | Sun 10/18 10:00 AM | PHI | 59% | CAR by 1.5 | 50% | +8.7 | Bet PHI (+8.7 pts) | +$0.91 per $1 risked |
-| CHI @ ATL | Sun 10/18 10:00 AM | CHI | 52% | CHI by 2.5 | 58% | -6.3 | Bet ATL † (+6.3 pts) | +$1.30 per $1 risked |
-| NO @ NYG | Sun 10/18 10:00 AM | NYG | 58% | NO by 1.5 | 48% | +9.6 | Bet NYG (+9.6 pts) | +$0.98 per $1 risked |
-| NYJ @ NE | Sun 10/18 10:00 AM | NE | 85% | NE by 7.5 | 74% | +10.8 | Bet NE (+10.8 pts) | +$0.29 per $1 risked |
-| PIT @ TB | Sun 10/18 10:00 AM | TB | 53% | PIT by 2.5 | 44% | +9.7 | Bet TB (+9.7 pts) | +$1.20 per $1 risked |
-| TEN @ IND | Sun 10/18 10:00 AM | IND | 74% | IND by 7 | 73% | +0.5 | No bet | – |
-| ARI @ LA | Sun 10/18 1:05 PM | LA | 79% | LA by 12.5 | 86% | -7.2 | Bet ARI † (+7.2 pts) | +$5.75 per $1 risked |
-| BUF @ LV | Sun 10/18 1:25 PM | BUF | 75% | BUF by 5.5 | 69% | +6.0 | Bet BUF (+6.0 pts) | +$0.39 per $1 risked |
-| LAC @ KC | Sun 10/18 1:25 PM | KC | 70% | KC by 8.5 | 80% | -9.6 | Bet LAC † (+9.6 pts) | +$3.80 per $1 risked |
-| DAL @ GB | Sun 10/18 5:20 PM | GB | 65% | GB by 1.5 | 53% | +12.2 | Bet GB (+12.2 pts) | +$0.82 per $1 risked |
-| WAS @ SF | Mon 10/19 5:15 PM | SF | 82% | SF by 7.5 | 78% | +3.9 | No bet | – |
+| Game | Kickoff (Pacific) | Model picks | Model's chance | Vegas favorite | Vegas's chance | Gap (pts) | Paper bet | If the bet wins | Final score | Pick right? | Bet result (units) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| SEA @ DEN | Thu 10/15 5:15 PM | DEN | 54% | SEA by 2.5 | 44% | +10.4 | Bet DEN (+10.4 pts) | +$1.20 per $1 risked | SEA 14, DEN 17 | Yes | Won: +1.20 |
+| HOU @ JAX | Sun 10/18 6:30 AM | JAX | 62% | JAX by 2.5 | 56% | +5.5 | Bet JAX (+5.5 pts) | +$0.70 per $1 risked | HOU 34, JAX 31 | No | Lost: -1.00 |
+| BAL @ CLE | Sun 10/18 10:00 AM | BAL | 72% | BAL by 5.5 | 70% | +2.1 | No bet | – | BAL 10, CLE 13 | No | – |
+| CAR @ PHI | Sun 10/18 10:00 AM | PHI | 59% | CAR by 1.5 | 50% | +8.7 | Bet PHI (+8.7 pts) | +$0.91 per $1 risked | CAR 25, PHI 14 | No | Lost: -1.00 |
+| CHI @ ATL | Sun 10/18 10:00 AM | CHI | 52% | CHI by 2.5 | 58% | -6.3 | Bet ATL † (+6.3 pts) | +$1.30 per $1 risked | CHI 31, ATL 23 | Yes | Lost: -1.00 |
+| NO @ NYG | Sun 10/18 10:00 AM | NYG | 58% | NO by 1.5 | 48% | +9.6 | Bet NYG (+9.6 pts) | +$0.98 per $1 risked | NO 34, NYG 27 | No | Lost: -1.00 |
+| NYJ @ NE | Sun 10/18 10:00 AM | NE | 85% | NE by 7.5 | 74% | +10.8 | Bet NE (+10.8 pts) | +$0.29 per $1 risked | NYJ 19, NE 26 | Yes | Won: +0.29 |
+| PIT @ TB | Sun 10/18 10:00 AM | TB | 53% | PIT by 2.5 | 44% | +9.7 | Bet TB (+9.7 pts) | +$1.20 per $1 risked | PIT 26, TB 19 | No | Lost: -1.00 |
+| TEN @ IND | Sun 10/18 10:00 AM | IND | 74% | IND by 7 | 73% | +0.5 | No bet | – | TEN 26, IND 20 | No | – |
+| ARI @ LA | Sun 10/18 1:05 PM | LA | 79% | LA by 12.5 | 86% | -7.2 | Bet ARI † (+7.2 pts) | +$5.75 per $1 risked | ARI 18, LA 16 | No | Won: +5.75 |
+| BUF @ LV | Sun 10/18 1:25 PM | BUF | 75% | BUF by 5.5 | 69% | +6.0 | Bet BUF (+6.0 pts) | +$0.39 per $1 risked | BUF 33, LV 30 | Yes | Won: +0.39 |
+| LAC @ KC | Sun 10/18 1:25 PM | KC | 70% | KC by 8.5 | 80% | -9.6 | Bet LAC † (+9.6 pts) | +$3.80 per $1 risked | LAC 6, KC 22 | Yes | Lost: -1.00 |
+| DAL @ GB | Sun 10/18 5:20 PM | GB | 65% | GB by 1.5 | 53% | +12.2 | Bet GB (+12.2 pts) | +$0.82 per $1 risked | DAL 13, GB 23 | Yes | Won: +0.82 |
+| WAS @ SF | Mon 10/19 5:15 PM | SF | 82% | SF by 7.5 | 78% | +3.9 | No bet | – | WAS 17, SF 23 | Yes | – |
 
 † Bet on the team the model does not pick to win; see "Why a bet can be on the team the model doesn't pick" above.
 
@@ -63,9 +65,9 @@ _Predictions logged Wed 10/14 10:42 AM Pacific, against betting odds pulled Wed 
 
 The challenger agreed with the champion on 13 of 14 games.
 
-| Game | Champion: pick / bet | Challenger picks | Challenger's chance | Vegas's chance | Gap (pts) | Challenger's bet (hypothetical) |
-|---|---|---|---|---|---|---|
-| HOU @ JAX | JAX / Bet JAX (+5.5 pts) | JAX | 60% | 56% | +3.3 | No bet |
+| Game | Champion: pick / bet | Challenger picks | Challenger's chance | Vegas's chance | Gap (pts) | Challenger's bet (hypothetical) | Challenger bet result |
+|---|---|---|---|---|---|---|---|
+| HOU @ JAX | JAX / Bet JAX (+5.5 pts) | JAX | 60% | 56% | +3.3 | No bet | – |
 
 ## The official record
 
