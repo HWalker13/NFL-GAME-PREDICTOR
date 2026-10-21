@@ -1,0 +1,107 @@
+# Phase 10: automated line snapshots between the owner's Wednesday prediction
+# run and kickoff, so games get a later pre-kickoff snapshot for CLV
+# (docs/PHASE10_PREREG.md Section 3; Amendment 3 needs >= 6 h after the
+# prediction snapshot).
+#
+# Runs ONLY `python -m src.data_ingest --refresh-season 2026`, which writes
+# only under data/raw/ (snapshots + pull_metadata.json committed; the raw
+# pbp/schedule parquet files are gitignored and discarded with the runner).
+# It never touches data/live/, docs/live/ or predictions; the commit step
+# below refuses if anything else changed.
+#
+# Schedule (cron is UTC; GitHub can start a scheduled run up to ~1 h late,
+# and drops runs entirely under heavy load -- these are best-effort):
+#
+#   slot (UTC)       EDT (UTC-4, to Oct 31)   EST (UTC-5, from Nov 1)   before
+#   Thu 22:07, 23:07  18:07, 19:07 ET           17:07, 18:07 ET           TNF 20:15 ET = Fri 00:15 UTC (EDT) / 01:15 UTC (EST)
+#   Sun 11:07, 12:07  07:07, 08:07 ET           06:07, 07:07 ET           London/intl 09:30 ET = 13:30 UTC (EDT) / 14:30 UTC (EST)
+#   Sun 15:30, 16:30  11:30, 12:30 ET           10:30, 11:30 ET           1 PM ET slate = 17:00 UTC (EDT) / 18:00 UTC (EST)
+#   Mon 22:07         18:07 ET                  17:07 ET                  MNF 20:15 ET = Tue 00:15 UTC (EDT) / 01:15 UTC (EST)
+#
+# The non-:30 slots run at :07, not :00: GitHub's scheduler is most congested
+# at the top of the hour, which is when runs are most often delayed or dropped.
+#
+# DST ends Sun 2026-11-01 (02:00 ET), so that Sunday is already EST. Cron is
+# fixed UTC; every slot is before its kickoff in both zones, and EST only adds
+# an hour of margin. Tightest case: the last EDT Sunday (Oct 25), where a
+# 16:30 run delayed > 30 min lands after the 17:00 UTC kickoff -- the 15:30
+# run is the backstop. A snapshot pulled after a game's kickoff is harmless:
+# grading only uses snapshots strictly before kickoff.
+#
+# NOT covered (use "Run workflow" manually): Thanksgiving Thu Nov 26 day
+# games, Fri Nov 27, Christmas Fri Dec 25, and late-season Saturday games.
+
+name: line snapshots
+
+on:
+  schedule:
+    - cron: "7 22 * * 4"    # Thu 22:07 UTC, pre-TNF
+    - cron: "7 23 * * 4"    # Thu 23:07 UTC, pre-TNF
+    - cron: "7 11 * * 0"    # Sun 11:07 UTC, London coverage
+    - cron: "7 12 * * 0"    # Sun 12:07 UTC, London coverage
+    - cron: "30 15 * * 0"   # Sun 15:30 UTC, before the 1 PM ET slate
+    - cron: "30 16 * * 0"   # Sun 16:30 UTC, before the 1 PM ET slate
+    - cron: "7 22 * * 1"    # Mon 22:07 UTC, pre-MNF
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never two refreshes at once (e.g. a delayed 22:07 run overlapping 23:07).
+concurrency:
+  group: line-snapshots
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # full history, so the pre-push rebase works
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.13"    # matches venv (see requirements.txt)
+          cache: pip
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Refresh 2026 (pbp + schedule + snapshot)
+        run: python -m src.data_ingest --refresh-season 2026
+
+      - name: Commit and push snapshot only
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/snapshots data/raw/pull_metadata.json
+          # Refuse if the refresh changed anything else that git tracks.
+          if [ -n "$(git status --porcelain --untracked-files=all | grep -v '^A  data/raw/snapshots/' | grep -v '^M  data/raw/pull_metadata.json$' || true)" ]; then
+            echo "REFUSING: unexpected changes outside data/raw/snapshots and data/raw/pull_metadata.json:"
+            git status --porcelain --untracked-files=all
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "Nothing changed; no commit."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "Phase 10: automated line snapshot $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # The owner may have pushed since checkout; replay on top of it.
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      # If the push fails (e.g. a rebase conflict in pull_metadata.json), the
+      # snapshot is not lost: download it from the run's Artifacts.
+      - name: Keep snapshot if the push failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-snapshot-${{ github.run_id }}
+          path: |
+            data/raw/snapshots/
+            data/raw/pull_metadata.json
+          retention-days: 30
