@@ -1,0 +1,107 @@
+{
+  "season": 2026,
+  "week": 8,
+  "live": true,
+  "predicted_at_utc": "2026-11-02T20:14:13Z",
+  "snapshot_file": "schedules_2026_20261102T201404Z.parquet",
+  "snapshot_pulled_at_utc": "2026-11-02T20:14:04Z",
+  "snapshot_sha256": "990c91e70ece7ea2d2116ecee5c0fdc575a24c6cb1724952c81837fe77eb5758",
+  "snapshot_age_hours_at_run": 0.0,
+  "pbp_sha256": "60f96071c4ba47e567dc1f1c519099ecd6281415d75c70cd93b137c60119862b",
+  "models": {
+    "champion": {
+      "file": "models/live_2026_champion.joblib",
+      "sha256": "f813a2b0cb58d3202c547ca30c8dc90e242a84a8a9b74d5a82f43293571c1006",
+      "elo_home_adv": 44.72586959078301,
+      "calibrator": null
+    },
+    "challenger": {
+      "file": "models/live_2026_challenger_calibrated.joblib",
+      "sha256": "185d565f2c1202cb693a527766f875d259b2c118140933efe776621c13daad28",
+      "elo_home_adv": 44.72586959078301,
+      "calibrator": {
+        "slope": 0.8832113202052384,
+        "intercept": -0.039093543769617566,
+        "n_fit": 1355
+      }
+    }
+  },
+  "features_py_sha256": "6be77b8d3547da6b9b64586bb104e61633a83221d82e249a705ed003ef156de7",
+  "script_sha256": {
+    "predict_week.py": "f5eee56ca1ffcec4132afc23dd0117228c048904998a3950560c8426a3bdc742",
+    "common.py": "010aae418f7e2bb6df665071aabdd9e59a65e485c6c8bf98b31b0e42e80a1ce2"
+  },
+  "n_games_predicted": 1,
+  "excluded_kicked_off": [
+    {
+      "game_id": "2026_08_CAR_GB",
+      "kickoff_utc": "2026-10-30T00:15:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_ARI_DAL",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_ATL_TB",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_BAL_BUF",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_CLE_PIT",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_IND_JAX",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_LV_NYJ",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_MIN_DET",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_TEN_CIN",
+      "kickoff_utc": "2026-11-01T18:00:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_LAC_LA",
+      "kickoff_utc": "2026-11-01T21:05:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_KC_DEN",
+      "kickoff_utc": "2026-11-01T21:25:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_NE_MIA",
+      "kickoff_utc": "2026-11-01T21:25:00Z",
+      "reason": "kicked off before run"
+    },
+    {
+      "game_id": "2026_08_PHI_WAS",
+      "kickoff_utc": "2026-11-02T01:20:00Z",
+      "reason": "kicked off before run"
+    }
+  ],
+  "earlier_week_unplayed_not_due": [],
+  "no_bet_missing_line": [],
+  "official_bets": 1,
+  "hypothetical_bets": 0,
+  "predictions_sha256": "c6bb82cdaf51c8da28737e1b6ead3fc48c03e81413935f11c5fac32e00717b87"
+}
