@@ -1,6 +1,6 @@
-# 2026 Week 8 -- model picks (before kickoff, no results yet)
+# 2026 Week 8 -- model picks (with results)
 
-_Predictions logged Mon 11/2 12:14 PM Pacific, against betting odds pulled Mon 11/2 12:14 PM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-11-02T20:14:30Z._
+_Predictions logged Mon 11/2 12:14 PM Pacific, against betting odds pulled Mon 11/2 12:14 PM Pacific. This page is regenerated from the official record and is not itself the record. Generated 2026-11-12T21:11:12Z._
 
 ## How to read this page
 
@@ -37,12 +37,14 @@ _Predictions logged Mon 11/2 12:14 PM Pacific, against betting odds pulled Mon 1
 ## This week
 
 - **1 games**, **1 official paper bets** (0 on the team the model does not pick to win, marked †).
+- Picks right so far: **0 of 1** decided games (0 not played yet, 0 ties).
+- Paper bets so far: **0 won, 1 lost**, 0 void; net **-1.00 units** (1 unit = the $1 risked per bet). One week says almost nothing about skill.
 
 ## Official picks (champion model)
 
-| Game | Kickoff (Pacific) | Model picks | Model's chance | Vegas favorite | Vegas's chance | Gap (pts) | Paper bet | If the bet wins |
-|---|---|---|---|---|---|---|---|---|
-| CHI @ SEA | Mon 11/2 5:15 PM | SEA | 66% | SEA by 3.5 | 61% | +4.6 | Bet SEA (+4.6 pts) | +$0.57 per $1 risked |
+| Game | Kickoff (Pacific) | Model picks | Model's chance | Vegas favorite | Vegas's chance | Gap (pts) | Paper bet | If the bet wins | Final score | Pick right? | Bet result (units) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CHI @ SEA | Mon 11/2 5:15 PM | SEA | 66% | SEA by 3.5 | 61% | +4.6 | Bet SEA (+4.6 pts) | +$0.57 per $1 risked | CHI 34, SEA 17 | No | Lost: -1.00 |
 
 † Bet on the team the model does not pick to win; see "Why a bet can be on the team the model doesn't pick" above.
 
@@ -50,9 +52,9 @@ _Predictions logged Mon 11/2 12:14 PM Pacific, against betting odds pulled Mon 1
 
 The challenger agreed with the champion on 0 of 1 games.
 
-| Game | Champion: pick / bet | Challenger picks | Challenger's chance | Vegas's chance | Gap (pts) | Challenger's bet (hypothetical) |
-|---|---|---|---|---|---|---|
-| CHI @ SEA | SEA / Bet SEA (+4.6 pts) | SEA | 63% | 61% | +2.0 | No bet |
+| Game | Champion: pick / bet | Challenger picks | Challenger's chance | Vegas's chance | Gap (pts) | Challenger's bet (hypothetical) | Challenger bet result |
+|---|---|---|---|---|---|---|---|
+| CHI @ SEA | SEA / Bet SEA (+4.6 pts) | SEA | 63% | 61% | +2.0 | No bet | – |
 
 ## The official record
 
