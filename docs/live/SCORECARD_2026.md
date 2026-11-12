@@ -1,6 +1,6 @@
 # 2026 shadow-mode scorecard
 
-_Generated 2026-11-12T21:11:09Z from 6 graded week file(s): 3, 4, 5, 6, 7, 8. Paper trading only -- no real money.
+_Generated 2026-11-12T21:26:34Z from 6 graded week file(s): 3, 4, 5, 6, 7, 8. Paper trading only -- no real money.
 Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged predictions are never edited._
 
 ## How to read this
@@ -81,11 +81,26 @@ Edge = model probability minus vig-free implied probability for the side bet, at
 | 8 | champion | 1 | 0.000 | 1.0649 | 0.4293 | 0.000 | 0.000 | 1 | -1.00 | – (0) |
 | 8 | challenger | 1 | 0.000 | 0.9916 | 0.3957 | 0.000 | 0.000 | 0 | +0.00 | – (0) |
 
-## Midseason checkpoint (after week 9)
+## Midseason checkpoint (weeks 4-9)
 
-Rule (pre-registered): the challenger replaces the champion for the rest of the season ONLY if its mean per-game log loss over the checkpoint window (weeks 4-9) is lower by more than 0.010 (mean challenger - champion < -0.010) AND a one-sided paired t-test on per-game log loss gives p < 0.05 (Phase 8's rule). Otherwise the champion continues and the comparison is recorded. A swap at n = 88 is unlikely; the comparison's main value is informing the 2027 model.
+Rule (pre-registered): the challenger replaces the champion for the rest of the season ONLY if its mean per-game log loss over the checkpoint window (weeks 4-9) is lower by more than 0.010 (mean challenger - champion < -0.010) AND a one-sided paired t-test on per-game log loss gives p < 0.05 (Phase 8's rule). Otherwise the champion continues and the comparison is recorded. The comparison's main value is informing the 2027 model.
 
-Not yet evaluable: graded checkpoint weeks [4, 5, 6, 7, 8], 0 pending game(s). The decision is taken once, after week 9 is fully graded.
+Evaluable (Amendment 4) once every window week is fully graded or is a documented missed week (no prediction file, every kickoff past); a missed week contributes 0 games and a partially missed week only its predicted games.
+
+| Week | Scheduled | Predicted | Paired (decided) | Status |
+|---:|---:|---:|---:|---|
+| 4 | 16 | 16 | 16 | graded |
+| 5 | 15 | 15 | 14 | graded |
+| 6 | 14 | 14 | 14 | graded |
+| 7 | 14 | 14 | 14 | graded |
+| 8 | 14 | 1 | 1 | graded |
+| 9 | 15 | 0 | 0 | missed (no prediction file, every kickoff past) |
+
+Planned window: 88 games; paired games actually graded for both models: n = 59.
+
+Mean per-game log loss: champion 0.65786, challenger 0.65046; mean difference (challenger - champion) = -0.00740; one-sided paired t p = 0.1087.
+
+**Decision: NO SWAP -- champion continues.**
 
 ## Season-end betting verdict (PROVISIONAL -- the verdict is only taken at season end)
 

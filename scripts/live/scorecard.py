@@ -19,8 +19,11 @@ from scipy import stats
 
 from scripts.live import common as C
 
+# Checkpoint window = weeks CHECKPOINT_FIRST_WEEK..CHECKPOINT_WEEK (4-9, 88 games planned); week 3 is
+# official but outside it (prereg Amendment 1). When it becomes evaluable: Amendment 4 (missed weeks
+# count 0 games; no week is special-cased).
 CHECKPOINT_WEEK = 9
-CHECKPOINT_FIRST_WEEK = 4   # checkpoint window is weeks 4-9 (88 games); week 3 is official but outside it (prereg Amendment 1)
+CHECKPOINT_FIRST_WEEK = 4
 ALPHA = 0.05
 EDGE_BUCKETS = ((0.04, 0.06), (0.06, 0.08), (0.08, np.inf))   # [lo, hi), descriptive only
 SMALL_BUCKET_N = 30
@@ -291,29 +294,98 @@ def paired_ll(df: pd.DataFrame, max_week: int | None = None) -> pd.Series:
     return wide["challenger"] - wide["champion"]
 
 
-def checkpoint_section(df: pd.DataFrame) -> str:
+WEEK_GRADED = "graded"
+WEEK_MISSED = "missed (no prediction file, every kickoff past)"
+
+
+def checkpoint_week_status(df: pd.DataFrame, week: int, predicted: dict[int, set],
+                           schedule: pd.DataFrame, now: pd.Timestamp) -> tuple[bool, str]:
+    """(done, status) for one checkpoint-window week (prereg Amendment 4).
+
+    Done = fully graded (every logged game graded for both models, none
+    pending) OR a documented missed week (no prediction file and every one of
+    the week's kickoffs is in the past). A partially missed week is "fully
+    graded" once its predicted games are; its unpredicted games never count.
+    ``predicted`` = {week: game_ids in week_NN_predictions.csv};
+    ``schedule`` = the season's REG games with ``week`` and naive-UTC ``kickoff``.
+    """
+    g = df[df["week"] == week]
+    if week in predicted:
+        want = set(predicted[week])
+        for model in ("champion", "challenger"):
+            have = set(g.loc[g["model"] == model, "game_id"])
+            if not want <= have:
+                return False, f"awaiting grading ({len(want - have)} of {len(want)} logged game(s) not graded for {model})"
+        n_pending = int(g.loc[g["game_id"].isin(want) & (g["model"] == "champion"), "result"].eq("pending").sum())
+        if n_pending:
+            return False, f"{n_pending} pending game(s)"
+        return True, WEEK_GRADED
+    if len(g):
+        return False, "graded rows exist but no prediction file -- inconsistent, not evaluable"
+    kick = schedule.loc[schedule["week"] == week, "kickoff"]
+    if kick.empty:
+        return False, "week not found in the schedule"
+    if kick.isna().any() or (kick >= now).any():
+        return False, f"not predicted; {int((kick >= now).sum())} game(s) not yet kicked off"
+    return True, WEEK_MISSED
+
+
+def checkpoint_section(df: pd.DataFrame, predicted: dict[int, set], schedule: pd.DataFrame,
+                       now: pd.Timestamp) -> str:
+    """Midseason checkpoint. The rule, margin, test and window are the
+    pre-registered ones (prereg Section 5); WHEN it is evaluable follows
+    Amendment 4: every window week fully graded or a documented missed week."""
+    window = list(range(CHECKPOINT_FIRST_WEEK, CHECKPOINT_WEEK + 1))
     shadow = df[df["week"].between(CHECKPOINT_FIRST_WEEK, CHECKPOINT_WEEK)]
-    weeks_done = sorted(shadow["week"].unique().tolist())
-    all_weeks = list(range(CHECKPOINT_FIRST_WEEK, CHECKPOINT_WEEK + 1))
-    pending = int((shadow["result"] == "pending").sum())
-    head = (f"## Midseason checkpoint (after week {CHECKPOINT_WEEK})\n\n"
+    planned = int(schedule["week"].isin(window).sum())
+    head = (f"## Midseason checkpoint (weeks {CHECKPOINT_FIRST_WEEK}-{CHECKPOINT_WEEK})\n\n"
             f"Rule (pre-registered): the challenger replaces the champion for the rest of the season ONLY if "
             f"its mean per-game log loss over the checkpoint window (weeks {CHECKPOINT_FIRST_WEEK}-{CHECKPOINT_WEEK}) is lower "
             f"by more than {CHECKPOINT_MARGIN:.3f} (mean challenger - champion < -{CHECKPOINT_MARGIN:.3f}) AND a "
             f"one-sided paired t-test on per-game log loss gives p < {ALPHA} (Phase 8's rule). Otherwise the "
-            f"champion continues and the comparison is recorded. A swap at n = 88 is unlikely; the "
-            f"comparison's main value is informing the 2027 model.\n\n")
-    if weeks_done != all_weeks or pending:
-        return head + (f"Not yet evaluable: graded checkpoint weeks {weeks_done or 'none'}, "
-                       f"{pending} pending game(s). The decision is taken once, after week "
-                       f"{CHECKPOINT_WEEK} is fully graded.\n")
+            f"champion continues and the comparison is recorded. The comparison's main value is informing "
+            f"the 2027 model.\n\n"
+            f"Evaluable (Amendment 4) once every window week is fully graded or is a documented missed week "
+            f"(no prediction file, every kickoff past); a missed week contributes 0 games and a partially "
+            f"missed week only its predicted games.\n\n")
+    rows = ["| Week | Scheduled | Predicted | Paired (decided) | Status |", "|---:|---:|---:|---:|---|"]
+    all_done = True
+    for w in window:
+        done, status = checkpoint_week_status(df, w, predicted, schedule, now)
+        all_done &= done
+        n_paired = len(paired_ll(shadow[shadow["week"] == w])) if done else 0
+        rows.append(f"| {w} | {int((schedule['week'] == w).sum())} | {len(predicted.get(w, ()))} | "
+                    f"{n_paired if done else '–'} | {status} |")
+    head += "\n".join(rows) + "\n\n"
+    if not all_done:
+        return head + "Not yet evaluable: see the week statuses above. The decision is taken once.\n"
     d = paired_ll(shadow)
-    mean = float(d.mean())
+    mean = float(d.mean()) if len(d) else np.nan
     p = one_sided_t(d, "less")
     swap = bool(mean < -CHECKPOINT_MARGIN and not np.isnan(p) and p < ALPHA)
-    return head + (f"n = {len(d)} paired games; mean per-game log-loss difference (challenger - champion) "
+    means = (decided(shadow).pivot_table(index="game_id", columns="model", values="log_loss")
+             .loc[d.index].mean() if len(d) else pd.Series(dtype=float))
+    return head + (f"Planned window: {planned} games; paired games actually graded for both models: n = {len(d)}.\n\n"
+                   f"Mean per-game log loss: champion {fmt(means.get('champion', np.nan), 5)}, challenger "
+                   f"{fmt(means.get('challenger', np.nan), 5)}; mean difference (challenger - champion) "
                    f"= {mean:+.5f}; one-sided paired t p = {fmt(p, 4)}.\n\n"
-                   f"**Decision: {'SWAP -- challenger becomes the official model from week 10' if swap else 'NO SWAP -- champion continues'}.**\n")
+                   f"**Decision: {'SWAP -- challenger becomes the official model for every week not yet predicted' if swap else 'NO SWAP -- champion continues'}.**\n")
+
+
+def load_predicted(root: Path, season: int) -> dict[int, set]:
+    """{week: game_ids} from every week_NN_predictions.csv (read only)."""
+    out = {}
+    for f in sorted((root / str(season) / "predictions").glob("week_*_predictions.csv")):
+        out[int(f.name.split("_")[1])] = set(pd.read_csv(f, usecols=["game_id"])["game_id"])
+    return out
+
+
+def load_schedule_kickoffs(season: int) -> pd.DataFrame:
+    """REG games of ``season`` with naive-UTC kickoff, from the latest snapshot,
+    via the same kickoff definition predict/grade use."""
+    from src import live_features as LF
+    s = pd.read_parquet(C.latest_snapshot(season))
+    return LF.season_schedule_with_kickoff(s, season)[["week", "game_id", "kickoff"]]
 
 
 def verdict_section(df: pd.DataFrame, season_complete: bool) -> str:
@@ -333,7 +405,8 @@ def verdict_section(df: pd.DataFrame, season_complete: bool) -> str:
             f"({'as of the games graded so far' if not season_complete else 'full season'}).\n")
 
 
-def build_markdown(df: pd.DataFrame, season: int, n_files: int, now: str, season_complete: bool) -> str:
+def build_markdown(df: pd.DataFrame, season: int, n_files: int, now: str, season_complete: bool,
+                   predicted: dict[int, set], schedule: pd.DataFrame) -> str:
     weeks = ", ".join(str(w) for w in sorted(df["week"].unique())) if len(df) else "none"
     parts = [HEADER.format(season=season, now=now, n_files=n_files, weeks=weeks)]
     if df.empty:
@@ -351,7 +424,7 @@ def build_markdown(df: pd.DataFrame, season: int, n_files: int, now: str, season
                  "prediction snapshot. ROI = units per unit staked on settled bets.\n\n"
                  + edge_breakdown_table(df) + "\n")
     parts.append("## Weekly\n\n" + weekly_table(df) + "\n")
-    parts.append(checkpoint_section(df))
+    parts.append(checkpoint_section(df, predicted, schedule, C.naive_utc(pd.Timestamp(now))))
     parts.append(verdict_section(df, season_complete))
     return "\n".join(parts)
 
@@ -363,7 +436,8 @@ def main(argv=None) -> int:
     n_files = len(list((root / str(args.season) / "graded").glob("week_*_graded.csv"))) \
         if (root / str(args.season) / "graded").exists() else 0
     complete = bool(len(df) and df["week"].max() >= 18 and not (df["result"] == "pending").any())
-    md = build_markdown(df, args.season, n_files, C.iso(C.utc_now()), complete)
+    md = build_markdown(df, args.season, n_files, C.iso(C.utc_now()), complete,
+                        load_predicted(root, args.season), load_schedule_kickoffs(args.season))
     out = output_path(args.live, args.season)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(f".{out.name}.tmp")

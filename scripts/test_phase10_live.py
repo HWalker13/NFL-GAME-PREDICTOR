@@ -471,40 +471,105 @@ def _graded(weeks, ll_champ, ll_chall, clv=0.0, pending_week=None):
     return df
 
 
+NOW = pd.Timestamp("2026-11-12 22:00:00")      # fixed fake "now" (naive UTC)
+PAST = pd.Timestamp("2026-10-01 00:00:00")
+FUTURE = pd.Timestamp("2026-12-01 00:00:00")
+
+
+def _sched(weeks=range(3, 19), n=15, future_weeks=()):
+    """Synthetic schedule: game_ids match _graded's; kickoffs past unless listed."""
+    return pd.DataFrame([dict(week=w, game_id=f"{w}_{i}", kickoff=FUTURE if w in future_weeks else PAST)
+                         for w in weeks for i in range(n)])
+
+
+def _cp(df, predicted=None, schedule=None, now=NOW):
+    """checkpoint_section with prediction files inferred from the graded rows
+    (every graded week was predicted, all its games) unless given."""
+    if predicted is None:
+        predicted = {int(w): set(g["game_id"]) for w, g in df.groupby("week")} if len(df) else {}
+    return S.checkpoint_section(df, predicted, _sched() if schedule is None else schedule, now)
+
+
 class TestScorecard(unittest.TestCase):
     def test_checkpoint_not_evaluable_before_week9_complete(self):
-        self.assertIn("Not yet evaluable", S.checkpoint_section(_graded(range(4, 9), 0.65, 0.60)))
-        self.assertIn("Not yet evaluable", S.checkpoint_section(_graded(range(4, 10), 0.65, 0.60, pending_week=9)))
+        # week 9 not predicted yet and its games still to come -> wait
+        self.assertIn("Not yet evaluable", _cp(_graded(range(4, 9), 0.65, 0.60),
+                                               schedule=_sched(future_weeks=(9,))))
+        self.assertIn("Not yet evaluable", _cp(_graded(range(4, 10), 0.65, 0.60, pending_week=9)))
 
     def test_checkpoint_swap_only_when_lower_and_significant(self):
-        self.assertIn("Decision: SWAP", S.checkpoint_section(_graded(range(4, 10), 0.65, 0.60)))
-        self.assertIn("NO SWAP", S.checkpoint_section(_graded(range(4, 10), 0.60, 0.65)))
-        self.assertIn("NO SWAP", S.checkpoint_section(_graded(range(4, 10), 0.65, 0.65)))
+        self.assertIn("Decision: SWAP", _cp(_graded(range(4, 10), 0.65, 0.60)))
+        self.assertIn("NO SWAP", _cp(_graded(range(4, 10), 0.60, 0.65)))
+        self.assertIn("NO SWAP", _cp(_graded(range(4, 10), 0.65, 0.65)))
 
     def test_checkpoint_margin_required(self):
         # challenger better by 0.005 per game, highly significant -> still NO SWAP (margin 0.010)
-        self.assertIn("NO SWAP", S.checkpoint_section(_graded(range(4, 10), 0.650, 0.645)))
-        self.assertIn("Decision: SWAP", S.checkpoint_section(_graded(range(4, 10), 0.650, 0.635)))
+        self.assertIn("NO SWAP", _cp(_graded(range(4, 10), 0.650, 0.645)))
+        self.assertIn("Decision: SWAP", _cp(_graded(range(4, 10), 0.650, 0.635)))
 
     def test_checkpoint_ignores_weeks_after_9(self):
         df = pd.concat([_graded(range(4, 10), 0.60, 0.65), _graded(range(10, 14), 0.70, 0.40)])
-        self.assertIn("NO SWAP", S.checkpoint_section(df))
+        self.assertIn("NO SWAP", _cp(df))
 
     def test_checkpoint_excludes_week3(self):
         # Amendment 1: week 3 is official but outside the checkpoint window (weeks 4-9).
         # A week 3 strongly favouring either model must not change the decision ...
         df = pd.concat([_graded([3], 0.70, 0.40), _graded(range(4, 10), 0.60, 0.65)])
-        self.assertIn("NO SWAP", S.checkpoint_section(df))
+        self.assertIn("NO SWAP", _cp(df))
         df = pd.concat([_graded([3], 0.40, 0.70), _graded(range(4, 10), 0.65, 0.60)])
-        self.assertIn("Decision: SWAP", S.checkpoint_section(df))
+        self.assertIn("Decision: SWAP", _cp(df))
         # ... is not counted in n (6 weeks x 15 games) ...
-        self.assertIn("n = 90 paired games", S.checkpoint_section(df))
+        self.assertIn("n = 90.", _cp(df))
         # ... does not stand in for a missing checkpoint week, and a pending week 3 does not block it.
-        self.assertIn("Not yet evaluable", S.checkpoint_section(
-            pd.concat([_graded([3], 0.65, 0.60), _graded(range(4, 9), 0.65, 0.60)])))
-        self.assertIn("Decision: SWAP", S.checkpoint_section(
+        self.assertIn("Not yet evaluable", _cp(
+            pd.concat([_graded([3], 0.65, 0.60), _graded(range(4, 9), 0.65, 0.60)]),
+            schedule=_sched(future_weeks=(9,))))
+        self.assertIn("Decision: SWAP", _cp(
             pd.concat([_graded([3], 0.65, 0.60, pending_week=3), _graded(range(4, 10), 0.65, 0.60)])))
         self.assertEqual((S.CHECKPOINT_FIRST_WEEK, S.CHECKPOINT_WEEK), (4, 9))
+
+    # ---- Amendment 4: missed / partially missed weeks ---------------------- #
+    def test_missed_week_counts_as_zero_games(self):
+        # weeks 4-8 graded, week 9 never predicted and every week-9 kickoff past
+        out = _cp(_graded(range(4, 9), 0.65, 0.60))
+        self.assertIn("Decision: SWAP", out)
+        self.assertIn("n = 75.", out)                    # 5 weeks x 15, week 9 adds 0
+        self.assertIn("| 9 | 15 | 0 | 0 | missed", out)
+        self.assertIn("Planned window: 90 games", out)    # 6 x 15 in the synthetic schedule
+
+    def test_partial_week_counts_only_predicted_games(self):
+        # week 8: only 1 of 15 games predicted (and graded); week 9 missed
+        df = pd.concat([_graded(range(4, 8), 0.65, 0.60), _graded([8], 0.65, 0.60)])
+        df = df[(df["week"] != 8) | (df["game_id"] == "8_14")]
+        out = _cp(df)
+        self.assertIn("n = 61.", out)                    # 4 x 15 + 1 + 0
+        self.assertIn("| 8 | 15 | 1 | 1 | graded |", out)
+        self.assertIn("Decision:", out)
+
+    def test_waits_while_a_predicted_week_has_pending_games(self):
+        # week 8 predicted with a pending game -> wait, even though week 9 is a missed week
+        df = _graded(range(4, 9), 0.65, 0.60)
+        df.loc[(df["week"] == 8) & (df["game_id"] == "8_3"), "result"] = "pending"
+        out = _cp(df)
+        self.assertIn("Not yet evaluable", out)
+        self.assertIn("| 8 | 15 | 15 | – | 1 pending game(s) |", out)
+        # ... and a predicted week with no graded file yet also waits
+        df = _graded(range(4, 8), 0.65, 0.60)
+        pred = {w: {f"{w}_{i}" for i in range(15)} for w in range(4, 9)}
+        out = _cp(df, predicted=pred)
+        self.assertIn("Not yet evaluable", out)
+        self.assertIn("awaiting grading", out)
+
+    def test_does_not_wait_on_a_missed_week(self):
+        # two missed weeks (8, 9): evaluable with 4 weeks, no "wait forever"
+        out = _cp(_graded(range(4, 8), 0.65, 0.65))
+        self.assertNotIn("Not yet evaluable", out)
+        self.assertIn("n = 60.", out)
+        self.assertIn("NO SWAP", out)
+        # but an unpredicted week with a game still to come is not yet "missed"
+        sched = _sched()
+        sched.loc[(sched["week"] == 9) & (sched["game_id"] == "9_14"), "kickoff"] = FUTURE
+        self.assertIn("Not yet evaluable", _cp(_graded(range(4, 8), 0.65, 0.65), schedule=sched))
 
     def test_week3_counts_toward_season_verdict(self):
         # Amendment 1: week-3 official bets are part of the season-end CLV verdict.
@@ -553,10 +618,12 @@ class TestScorecard(unittest.TestCase):
         self.assertIn("small sample (n<30)", row["[0.08+)"])
 
     def test_markdown_renders(self):
-        md = S.build_markdown(_graded(range(4, 6), 0.6, 0.62), 2026, 2, "2026-10-13T00:00:00Z", False)
+        df = _graded(range(4, 6), 0.6, 0.62)
+        md = S.build_markdown(df, 2026, 2, "2026-10-13T00:00:00Z", False,
+                              {w: set(g["game_id"]) for w, g in df.groupby("week")}, _sched())
         self.assertIn("## Cumulative -- prediction quality", md)
         self.assertIn("PROVISIONAL", md)
-        self.assertIn("No graded weeks yet", S.build_markdown(pd.DataFrame(), 2026, 0, "t", False))
+        self.assertIn("No graded weeks yet", S.build_markdown(pd.DataFrame(), 2026, 0, "t", False, {}, _sched()))
 
 
 # --------------------------------------------------------------------------- #
