@@ -1,0 +1,43 @@
+{
+  "vegas_columns": {
+    "features.feature_columns()": {
+      "n_features": 67,
+      "line_like_names": []
+    },
+    "models/logreg_winner_tuned.joblib": {
+      "n_features": 67,
+      "line_like_names": []
+    },
+    "models/live_2026_champion.joblib": {
+      "n_features": 67,
+      "line_like_names": []
+    },
+    "game_features.parquet_line_like_columns": []
+  },
+  "rolling_perturbation": {
+    "ewm (shift(1).ewm)": {
+      "max_change_same_week": 0.0,
+      "max_change_next_week": 0.6472472143825303,
+      "PASS": true
+    },
+    "in-season mean (rolling closed='left')": {
+      "max_change_same_week": 0.0,
+      "max_change_next_week": 0.5555555820465088,
+      "PASS": true
+    },
+    "contrast: ewm WITHOUT shift(1) (deliberately leaky)": {
+      "max_change_same_week": 0.6472472143825303
+    }
+  },
+  "elo_perturbation": {
+    "max_change_same_week": 0.0,
+    "max_change_next_week": 76.9260326063411,
+    "PASS": true
+  },
+  "independent_ewm_recompute": {
+    "metric": "def_epa_per_play",
+    "team_games_checked": 80,
+    "max_abs_diff": 6.938893903907228e-17,
+    "PASS": true
+  }
+}

@@ -1,0 +1,839 @@
+{
+  "heldout_2023_2024": {
+    "label": "2023-24 walk-forward test",
+    "seasons": [
+      2023,
+      2024
+    ],
+    "reg_games_with_score": 544,
+    "ties_dropped": 0,
+    "tie_game_ids": [],
+    "n": 544,
+    "missing_lines": 0,
+    "pickem_spread0": 0,
+    "unresolved_fav": 0,
+    "spread_fav_ne_ml_fav": 1,
+    "per_season": {
+      "2023": {
+        "n": 272,
+        "home_baseline": {
+          "k": 151,
+          "n": 272,
+          "acc": 0.5551,
+          "wilson95": [
+            0.4957,
+            0.613
+          ]
+        },
+        "vegas_favorite": {
+          "k": 185,
+          "n": 272,
+          "acc": 0.6801,
+          "wilson95": [
+            0.6225,
+            0.7327
+          ],
+          "n_unresolved_excluded": 0
+        },
+        "vegas_novig_implied": {
+          "acc_p_gt_0.5": {
+            "k": 186,
+            "n": 272,
+            "acc": 0.6838,
+            "wilson95": [
+              0.6263,
+              0.7362
+            ]
+          },
+          "brier": 0.2187,
+          "log_loss": 0.6273
+        },
+        "LR-untuned": {
+          "k": 168,
+          "n": 272,
+          "acc": 0.6176,
+          "wilson95": [
+            0.5586,
+            0.6734
+          ],
+          "brier": 0.237,
+          "log_loss": 0.6675,
+          "disagree_with_vegas": {
+            "n": 53,
+            "model_right": 18,
+            "model_right_rate": 0.3396,
+            "wilson95": [
+              0.2269,
+              0.4741
+            ],
+            "exact_binom_p_vs_0.5": 0.027
+          }
+        },
+        "LR-tuned": {
+          "k": 169,
+          "n": 272,
+          "acc": 0.6213,
+          "wilson95": [
+            0.5624,
+            0.6769
+          ],
+          "brier": 0.2339,
+          "log_loss": 0.6606,
+          "disagree_with_vegas": {
+            "n": 44,
+            "model_right": 14,
+            "model_right_rate": 0.3182,
+            "wilson95": [
+              0.2,
+              0.4656
+            ],
+            "exact_binom_p_vs_0.5": 0.0226
+          }
+        },
+        "RandomForest": {
+          "k": 164,
+          "n": 272,
+          "acc": 0.6029,
+          "wilson95": [
+            0.5437,
+            0.6593
+          ],
+          "brier": 0.2327,
+          "log_loss": 0.6574,
+          "disagree_with_vegas": {
+            "n": 49,
+            "model_right": 14,
+            "model_right_rate": 0.2857,
+            "wilson95": [
+              0.1785,
+              0.4241
+            ],
+            "exact_binom_p_vs_0.5": 0.0038
+          }
+        },
+        "HGB-tuned": {
+          "k": 166,
+          "n": 272,
+          "acc": 0.6103,
+          "wilson95": [
+            0.5512,
+            0.6663
+          ],
+          "brier": 0.2356,
+          "log_loss": 0.6639,
+          "disagree_with_vegas": {
+            "n": 57,
+            "model_right": 19,
+            "model_right_rate": 0.3333,
+            "wilson95": [
+              0.2249,
+              0.4628
+            ],
+            "exact_binom_p_vs_0.5": 0.0163
+          }
+        },
+        "bets_LR-tuned_RETROACTIVE": {
+          "n_bets": 190,
+          "pct_of_games": 0.6985,
+          "home_bets": 116,
+          "away_bets": 74,
+          "W": 74,
+          "L": 116,
+          "P": 0,
+          "win_rate": 0.3895,
+          "win_rate_wilson95": [
+            0.323,
+            0.4603
+          ],
+          "breakeven_at_minus110": 0.5238,
+          "breakeven_mean_implied_of_prices_taken": 0.444,
+          "units": -19.32,
+          "roi": -0.1017,
+          "binom_p_vs_mean_implied": 0.1442,
+          "model_acc_on_bet_games": {
+            "k": 113,
+            "n": 190,
+            "acc": 0.5947,
+            "wilson95": [
+              0.5237,
+              0.662
+            ]
+          },
+          "model_acc_on_nobet_games": {
+            "k": 56,
+            "n": 82,
+            "acc": 0.6829,
+            "wilson95": [
+              0.576,
+              0.7735
+            ]
+          },
+          "bets_against_model_pick": 89
+        }
+      },
+      "2024": {
+        "n": 272,
+        "home_baseline": {
+          "k": 145,
+          "n": 272,
+          "acc": 0.5331,
+          "wilson95": [
+            0.4738,
+            0.5915
+          ]
+        },
+        "vegas_favorite": {
+          "k": 194,
+          "n": 272,
+          "acc": 0.7132,
+          "wilson95": [
+            0.6568,
+            0.7637
+          ],
+          "n_unresolved_excluded": 0
+        },
+        "vegas_novig_implied": {
+          "acc_p_gt_0.5": {
+            "k": 194,
+            "n": 272,
+            "acc": 0.7132,
+            "wilson95": [
+              0.6568,
+              0.7637
+            ]
+          },
+          "brier": 0.2002,
+          "log_loss": 0.5875
+        },
+        "LR-untuned": {
+          "k": 174,
+          "n": 272,
+          "acc": 0.6397,
+          "wilson95": [
+            0.5811,
+            0.6944
+          ],
+          "brier": 0.2193,
+          "log_loss": 0.6282,
+          "disagree_with_vegas": {
+            "n": 52,
+            "model_right": 16,
+            "model_right_rate": 0.3077,
+            "wilson95": [
+              0.1991,
+              0.4427
+            ],
+            "exact_binom_p_vs_0.5": 0.0078
+          }
+        },
+        "LR-tuned": {
+          "k": 181,
+          "n": 272,
+          "acc": 0.6654,
+          "wilson95": [
+            0.6074,
+            0.7189
+          ],
+          "brier": 0.2183,
+          "log_loss": 0.6261,
+          "disagree_with_vegas": {
+            "n": 47,
+            "model_right": 17,
+            "model_right_rate": 0.3617,
+            "wilson95": [
+              0.2397,
+              0.5046
+            ],
+            "exact_binom_p_vs_0.5": 0.0789
+          }
+        },
+        "RandomForest": {
+          "k": 179,
+          "n": 272,
+          "acc": 0.6581,
+          "wilson95": [
+            0.5999,
+            0.7119
+          ],
+          "brier": 0.2146,
+          "log_loss": 0.6187,
+          "disagree_with_vegas": {
+            "n": 51,
+            "model_right": 18,
+            "model_right_rate": 0.3529,
+            "wilson95": [
+              0.2363,
+              0.4901
+            ],
+            "exact_binom_p_vs_0.5": 0.0489
+          }
+        },
+        "HGB-tuned": {
+          "k": 176,
+          "n": 272,
+          "acc": 0.6471,
+          "wilson95": [
+            0.5886,
+            0.7014
+          ],
+          "brier": 0.2154,
+          "log_loss": 0.6196,
+          "disagree_with_vegas": {
+            "n": 54,
+            "model_right": 18,
+            "model_right_rate": 0.3333,
+            "wilson95": [
+              0.2224,
+              0.4664
+            ],
+            "exact_binom_p_vs_0.5": 0.0198
+          }
+        },
+        "bets_LR-tuned_RETROACTIVE": {
+          "n_bets": 187,
+          "pct_of_games": 0.6875,
+          "home_bets": 116,
+          "away_bets": 71,
+          "W": 71,
+          "L": 116,
+          "P": 0,
+          "win_rate": 0.3797,
+          "win_rate_wilson95": [
+            0.3132,
+            0.451
+          ],
+          "breakeven_at_minus110": 0.5238,
+          "breakeven_mean_implied_of_prices_taken": 0.4385,
+          "units": -34.83,
+          "roi": -0.1863,
+          "binom_p_vs_mean_implied": 0.1215,
+          "model_acc_on_bet_games": {
+            "k": 124,
+            "n": 187,
+            "acc": 0.6631,
+            "wilson95": [
+              0.5927,
+              0.727
+            ]
+          },
+          "model_acc_on_nobet_games": {
+            "k": 57,
+            "n": 85,
+            "acc": 0.6706,
+            "wilson95": [
+              0.5652,
+              0.7612
+            ]
+          },
+          "bets_against_model_pick": 93
+        }
+      }
+    },
+    "pooled": {
+      "n": 544,
+      "home_baseline": {
+        "k": 296,
+        "n": 544,
+        "acc": 0.5441,
+        "wilson95": [
+          0.5021,
+          0.5855
+        ]
+      },
+      "vegas_favorite": {
+        "k": 379,
+        "n": 544,
+        "acc": 0.6967,
+        "wilson95": [
+          0.6568,
+          0.7338
+        ],
+        "n_unresolved_excluded": 0
+      },
+      "vegas_novig_implied": {
+        "acc_p_gt_0.5": {
+          "k": 380,
+          "n": 544,
+          "acc": 0.6985,
+          "wilson95": [
+            0.6587,
+            0.7356
+          ]
+        },
+        "brier": 0.2094,
+        "log_loss": 0.6074
+      },
+      "LR-untuned": {
+        "k": 342,
+        "n": 544,
+        "acc": 0.6287,
+        "wilson95": [
+          0.5873,
+          0.6682
+        ],
+        "brier": 0.2282,
+        "log_loss": 0.6479,
+        "disagree_with_vegas": {
+          "n": 105,
+          "model_right": 34,
+          "model_right_rate": 0.3238,
+          "wilson95": [
+            0.2419,
+            0.4182
+          ],
+          "exact_binom_p_vs_0.5": 0.0004
+        }
+      },
+      "LR-tuned": {
+        "k": 350,
+        "n": 544,
+        "acc": 0.6434,
+        "wilson95": [
+          0.6023,
+          0.6825
+        ],
+        "brier": 0.2261,
+        "log_loss": 0.6434,
+        "disagree_with_vegas": {
+          "n": 91,
+          "model_right": 31,
+          "model_right_rate": 0.3407,
+          "wilson95": [
+            0.2515,
+            0.4427
+          ],
+          "exact_binom_p_vs_0.5": 0.0031
+        }
+      },
+      "RandomForest": {
+        "k": 343,
+        "n": 544,
+        "acc": 0.6305,
+        "wilson95": [
+          0.5892,
+          0.67
+        ],
+        "brier": 0.2237,
+        "log_loss": 0.638,
+        "disagree_with_vegas": {
+          "n": 100,
+          "model_right": 32,
+          "model_right_rate": 0.32,
+          "wilson95": [
+            0.2367,
+            0.4166
+          ],
+          "exact_binom_p_vs_0.5": 0.0004
+        }
+      },
+      "HGB-tuned": {
+        "k": 342,
+        "n": 544,
+        "acc": 0.6287,
+        "wilson95": [
+          0.5873,
+          0.6682
+        ],
+        "brier": 0.2255,
+        "log_loss": 0.6418,
+        "disagree_with_vegas": {
+          "n": 111,
+          "model_right": 37,
+          "model_right_rate": 0.3333,
+          "wilson95": [
+            0.2525,
+            0.4253
+          ],
+          "exact_binom_p_vs_0.5": 0.0006
+        }
+      },
+      "bets_LR-tuned_RETROACTIVE": {
+        "n_bets": 377,
+        "pct_of_games": 0.693,
+        "home_bets": 232,
+        "away_bets": 145,
+        "W": 145,
+        "L": 232,
+        "P": 0,
+        "win_rate": 0.3846,
+        "win_rate_wilson95": [
+          0.3369,
+          0.4347
+        ],
+        "breakeven_at_minus110": 0.5238,
+        "breakeven_mean_implied_of_prices_taken": 0.4412,
+        "units": -54.15,
+        "roi": -0.1436,
+        "binom_p_vs_mean_implied": 0.0293,
+        "model_acc_on_bet_games": {
+          "k": 237,
+          "n": 377,
+          "acc": 0.6286,
+          "wilson95": [
+            0.5788,
+            0.6759
+          ]
+        },
+        "model_acc_on_nobet_games": {
+          "k": 113,
+          "n": 167,
+          "acc": 0.6766,
+          "wilson95": [
+            0.6024,
+            0.7429
+          ]
+        },
+        "bets_against_model_pick": 182
+      }
+    }
+  },
+  "holdout_2025": {
+    "label": "2025 pre-registered holdout",
+    "seasons": [
+      2025
+    ],
+    "reg_games_with_score": 272,
+    "ties_dropped": 1,
+    "tie_game_ids": [
+      "2025_04_GB_DAL"
+    ],
+    "n": 271,
+    "missing_lines": 0,
+    "pickem_spread0": 0,
+    "unresolved_fav": 0,
+    "spread_fav_ne_ml_fav": 0,
+    "per_season": {
+      "2025": {
+        "n": 271,
+        "home_baseline": {
+          "k": 146,
+          "n": 271,
+          "acc": 0.5387,
+          "wilson95": [
+            0.4793,
+            0.5971
+          ]
+        },
+        "vegas_favorite": {
+          "k": 177,
+          "n": 271,
+          "acc": 0.6531,
+          "wilson95": [
+            0.5947,
+            0.7073
+          ],
+          "n_unresolved_excluded": 0
+        },
+        "vegas_novig_implied": {
+          "acc_p_gt_0.5": {
+            "k": 178,
+            "n": 271,
+            "acc": 0.6568,
+            "wilson95": [
+              0.5985,
+              0.7108
+            ]
+          },
+          "brier": 0.2121,
+          "log_loss": 0.6094
+        },
+        "LR-untuned": {
+          "k": 164,
+          "n": 271,
+          "acc": 0.6052,
+          "wilson95": [
+            0.5459,
+            0.6615
+          ],
+          "brier": 0.225,
+          "log_loss": 0.6398,
+          "disagree_with_vegas": {
+            "n": 33,
+            "model_right": 10,
+            "model_right_rate": 0.303,
+            "wilson95": [
+              0.1738,
+              0.4734
+            ],
+            "exact_binom_p_vs_0.5": 0.0351
+          }
+        },
+        "LR-tuned": {
+          "k": 167,
+          "n": 271,
+          "acc": 0.6162,
+          "wilson95": [
+            0.5571,
+            0.6721
+          ],
+          "brier": 0.2237,
+          "log_loss": 0.6366,
+          "disagree_with_vegas": {
+            "n": 32,
+            "model_right": 11,
+            "model_right_rate": 0.3438,
+            "wilson95": [
+              0.2041,
+              0.5169
+            ],
+            "exact_binom_p_vs_0.5": 0.1102
+          }
+        },
+        "RandomForest": {
+          "k": 167,
+          "n": 271,
+          "acc": 0.6162,
+          "wilson95": [
+            0.5571,
+            0.6721
+          ],
+          "brier": 0.2226,
+          "log_loss": 0.6353,
+          "disagree_with_vegas": {
+            "n": 38,
+            "model_right": 14,
+            "model_right_rate": 0.3684,
+            "wilson95": [
+              0.2338,
+              0.5272
+            ],
+            "exact_binom_p_vs_0.5": 0.1433
+          }
+        },
+        "HGB-tuned": {
+          "k": 177,
+          "n": 271,
+          "acc": 0.6531,
+          "wilson95": [
+            0.5947,
+            0.7073
+          ],
+          "brier": 0.224,
+          "log_loss": 0.6397,
+          "disagree_with_vegas": {
+            "n": 38,
+            "model_right": 19,
+            "model_right_rate": 0.5,
+            "wilson95": [
+              0.3485,
+              0.6515
+            ],
+            "exact_binom_p_vs_0.5": 1.0
+          }
+        },
+        "bets_LR-tuned_RETROACTIVE": {
+          "n_bets": 172,
+          "pct_of_games": 0.6347,
+          "home_bets": 81,
+          "away_bets": 91,
+          "W": 69,
+          "L": 103,
+          "P": 0,
+          "win_rate": 0.4012,
+          "win_rate_wilson95": [
+            0.3308,
+            0.4758
+          ],
+          "breakeven_at_minus110": 0.5238,
+          "breakeven_mean_implied_of_prices_taken": 0.4019,
+          "units": -3.59,
+          "roi": -0.0208,
+          "binom_p_vs_mean_implied": 1.0,
+          "model_acc_on_bet_games": {
+            "k": 99,
+            "n": 172,
+            "acc": 0.5756,
+            "wilson95": [
+              0.5009,
+              0.647
+            ]
+          },
+          "model_acc_on_nobet_games": {
+            "k": 68,
+            "n": 99,
+            "acc": 0.6869,
+            "wilson95": [
+              0.59,
+              0.7698
+            ]
+          },
+          "bets_against_model_pick": 92
+        }
+      }
+    },
+    "lines_changed_since_phase8": 0
+  },
+  "live_2026": {
+    "weeks": {
+      "3": {
+        "games_logged": 16,
+        "predicted_at_utc": "2026-09-23T21:43:26Z",
+        "first_logged_kickoff_utc": "2026-09-25T00:15:00Z",
+        "graded": true
+      },
+      "4": {
+        "games_logged": 16,
+        "predicted_at_utc": "2026-10-01T19:00:58Z",
+        "first_logged_kickoff_utc": "2026-10-02T00:15:00Z",
+        "graded": true
+      },
+      "5": {
+        "games_logged": 15,
+        "predicted_at_utc": "2026-10-07T18:40:56Z",
+        "first_logged_kickoff_utc": "2026-10-09T00:15:00Z",
+        "graded": true
+      },
+      "6": {
+        "games_logged": 14,
+        "predicted_at_utc": "2026-10-14T17:42:05Z",
+        "first_logged_kickoff_utc": "2026-10-16T00:15:00Z",
+        "graded": true
+      },
+      "7": {
+        "games_logged": 14,
+        "predicted_at_utc": "2026-10-21T21:37:57Z",
+        "first_logged_kickoff_utc": "2026-10-23T00:15:00Z",
+        "graded": true
+      },
+      "8": {
+        "games_logged": 1,
+        "predicted_at_utc": "2026-11-02T20:14:13Z",
+        "first_logged_kickoff_utc": "2026-11-03T01:15:00Z",
+        "graded": true
+      },
+      "10": {
+        "games_logged": 14,
+        "predicted_at_utc": "2026-11-12T21:09:46Z",
+        "first_logged_kickoff_utc": "2026-11-13T01:15:00Z",
+        "graded": false
+      }
+    },
+    "graded_weeks": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "games_graded": 76,
+    "ties": 1,
+    "score_mismatch_vs_latest_snapshot": 0,
+    "latest_snapshot": "schedules_2026_20261112T210940Z.parquet",
+    "bet_rule_mismatch_vs_logged": 0,
+    "units_max_abs_diff_vs_graded": 4.9494963683116566e-11,
+    "champion": {
+      "k": 44,
+      "n": 75,
+      "acc": 0.5867,
+      "wilson95": [
+        0.4737,
+        0.6912
+      ],
+      "brier": 0.2353,
+      "log_loss": 0.6611
+    },
+    "home_baseline": {
+      "k": 35,
+      "n": 75,
+      "acc": 0.4667,
+      "wilson95": [
+        0.3582,
+        0.5784
+      ]
+    },
+    "vegas_favorite": {
+      "k": 45,
+      "n": 75,
+      "acc": 0.6,
+      "wilson95": [
+        0.4869,
+        0.7034
+      ]
+    },
+    "vegas_novig_implied": {
+      "brier": 0.2443,
+      "log_loss": 0.684
+    },
+    "disagree_with_vegas": {
+      "n": 15,
+      "model_right": 7,
+      "wilson95": [
+        0.2481,
+        0.6988
+      ]
+    },
+    "bets": {
+      "n_bets": 53,
+      "pct_of_games": 0.6974,
+      "W": 28,
+      "L": 24,
+      "P": 1,
+      "win_rate": 0.5385,
+      "win_rate_wilson95": [
+        0.405,
+        0.6666
+      ],
+      "breakeven_at_minus110": 0.5238,
+      "breakeven_mean_implied_of_prices_taken": 0.4891,
+      "units": 10.98,
+      "roi_per_settled_bet": 0.2112,
+      "bets_against_model_pick": 18,
+      "model_acc_on_bet_games": {
+        "k": 29,
+        "n": 52,
+        "acc": 0.5577,
+        "wilson95": [
+          0.4234,
+          0.684
+        ]
+      },
+      "model_acc_on_nobet_games": {
+        "k": 15,
+        "n": 23,
+        "acc": 0.6522,
+        "wilson95": [
+          0.4489,
+          0.8119
+        ]
+      },
+      "clv_measured_n": 8,
+      "clv_mean": -0.0052
+    }
+  },
+  "sign_convention_examples": [
+    {
+      "game_id": "2023_01_DET_KC",
+      "gameday": "2023-09-07",
+      "away_team": "DET",
+      "home_team": "KC",
+      "spread_line": 4.0,
+      "home_moneyline": -198.0,
+      "away_moneyline": 164.0,
+      "away_score": 21.0,
+      "home_score": 20.0
+    },
+    {
+      "game_id": "2023_01_ARI_WAS",
+      "gameday": "2023-09-10",
+      "away_team": "ARI",
+      "home_team": "WAS",
+      "spread_line": 7.0,
+      "home_moneyline": -340.0,
+      "away_moneyline": 270.0,
+      "away_score": 16.0,
+      "home_score": 20.0
+    },
+    {
+      "game_id": "2024_01_BAL_KC",
+      "gameday": "2024-09-05",
+      "away_team": "BAL",
+      "home_team": "KC",
+      "spread_line": 3.0,
+      "home_moneyline": -148.0,
+      "away_moneyline": 124.0,
+      "away_score": 20.0,
+      "home_score": 27.0
+    }
+  ]
+}

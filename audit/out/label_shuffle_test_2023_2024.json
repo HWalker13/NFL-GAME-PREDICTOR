@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "train": "2002-2022",
+      "eval": 2023,
+      "n_eval": 272,
+      "home_win_rate_eval": 0.5551
+    },
+    {
+      "train": "2002-2023",
+      "eval": 2024,
+      "n_eval": 272,
+      "home_win_rate_eval": 0.5331
+    }
+  ],
+  "n_shuffles": 20,
+  "mean": 0.5392,
+  "std": 0.0118,
+  "min": 0.5074,
+  "max": 0.5588,
+  "pipeline": "Pipeline(steps=[('impute', SimpleImputer(strategy='median')),\n                ('scale', StandardScaler()),\n                ('clf',\n                 LogisticRegression(C=0.01, max_iter=1000, random_state=0))])"
+}
