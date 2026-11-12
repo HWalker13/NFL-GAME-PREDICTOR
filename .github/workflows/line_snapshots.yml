@@ -3,51 +3,45 @@
 # (docs/PHASE10_PREREG.md Section 3; Amendment 3 needs >= 6 h after the
 # prediction snapshot).
 #
-# Runs ONLY `python -m src.data_ingest --refresh-season 2026`, which writes
-# only under data/raw/ (snapshots + pull_metadata.json committed; the raw
-# pbp/schedule parquet files are gitignored and discarded with the runner).
-# It never touches data/live/, docs/live/ or predictions; the commit step
-# below refuses if anything else changed.
+# Kickoff-aware (2026-11-12). The cron fires every hour; each run asks
+# scripts/live/snapshot_gate.py whether to snapshot. It refreshes ONLY if
+#   (a) an unplayed REG game kicks off within the next 4 h, AND
+#   (b) no snapshot in data/raw/snapshots/ is < 90 min old.
+# Otherwise the run ends with no refresh and no commit. Kickoffs are UTC from
+# the latest committed snapshot's schedule, so DST, Saturday, holiday and
+# international games need no hand-maintained slots.
 #
-# Schedule (cron is UTC; GitHub can start a scheduled run up to ~1 h late,
-# and drops runs entirely under heavy load -- these are best-effort):
+# Why not fixed slots: GitHub created the old fixed-slot runs 2.4-6 h late
+# (e.g. Thu 22:07 UTC slot -> run at Fri 02:08 UTC, after the 01:15 UTC TNF).
+# The gate decides on the run's ACTUAL time, so lateness cannot produce a
+# post-kickoff snapshot it thinks is pre-kickoff; it only needs some hourly
+# run to land inside each game's 4 h window.
 #
-#   slot (UTC)       EDT (UTC-4, to Oct 31)   EST (UTC-5, from Nov 1)   before
-#   Thu 22:07, 23:07  18:07, 19:07 ET           17:07, 18:07 ET           TNF 20:15 ET = Fri 00:15 UTC (EDT) / 01:15 UTC (EST)
-#   Sun 11:07, 12:07  07:07, 08:07 ET           06:07, 07:07 ET           London/intl 09:30 ET = 13:30 UTC (EDT) / 14:30 UTC (EST)
-#   Sun 15:30, 16:30  11:30, 12:30 ET           10:30, 11:30 ET           1 PM ET slate = 17:00 UTC (EDT) / 18:00 UTC (EST)
-#   Mon 22:07         18:07 ET                  17:07 ET                  MNF 20:15 ET = Tue 00:15 UTC (EDT) / 01:15 UTC (EST)
+# When the gate fires it runs `python -m src.data_ingest --refresh-season 2026`,
+# which writes only under data/raw/ (snapshots + pull_metadata.json committed;
+# the raw pbp/schedule parquet files are gitignored and discarded with the
+# runner). It never touches data/live/, docs/live/ or predictions; the commit
+# step below refuses if anything else changed.
 #
-# The non-:30 slots run at :07, not :00: GitHub's scheduler is most congested
-# at the top of the hour, which is when runs are most often delayed or dropped.
-#
-# DST ends Sun 2026-11-01 (02:00 ET), so that Sunday is already EST. Cron is
-# fixed UTC; every slot is before its kickoff in both zones, and EST only adds
-# an hour of margin. Tightest case: the last EDT Sunday (Oct 25), where a
-# 16:30 run delayed > 30 min lands after the 17:00 UTC kickoff -- the 15:30
-# run is the backstop. A snapshot pulled after a game's kickoff is harmless:
-# grading only uses snapshots strictly before kickoff.
-#
-# NOT covered (use "Run workflow" manually): Thanksgiving Thu Nov 26 day
-# games, Fri Nov 27, Christmas Fri Dec 25, and late-season Saturday games.
+# "Run workflow" (manual) with force=true snapshots regardless of the gate.
 
 name: line snapshots
 
 on:
   schedule:
-    - cron: "7 22 * * 4"    # Thu 22:07 UTC, pre-TNF
-    - cron: "7 23 * * 4"    # Thu 23:07 UTC, pre-TNF
-    - cron: "7 11 * * 0"    # Sun 11:07 UTC, London coverage
-    - cron: "7 12 * * 0"    # Sun 12:07 UTC, London coverage
-    - cron: "30 15 * * 0"   # Sun 15:30 UTC, before the 1 PM ET slate
-    - cron: "30 16 * * 0"   # Sun 16:30 UTC, before the 1 PM ET slate
-    - cron: "7 22 * * 1"    # Mon 22:07 UTC, pre-MNF
+    - cron: "17 * * * *"    # hourly at :17 (off the congested top of the hour); snapshot_gate.py decides
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Snapshot now, ignoring the kickoff gate"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
-# Never two refreshes at once (e.g. a delayed 22:07 run overlapping 23:07).
+# Never two runs at once (late hourly runs can bunch up). A newer queued run
+# replaces an older queued one, which is harmless: the gate re-decides at run time.
 concurrency:
   group: line-snapshots
   cancel-in-progress: false
@@ -69,10 +63,12 @@ jobs:
       - name: Install requirements
         run: pip install -r requirements.txt
 
-      - name: Refresh 2026 (pbp + schedule + snapshot)
-        run: python -m src.data_ingest --refresh-season 2026
+      - name: Gate, and refresh 2026 if it fires (pbp + schedule + snapshot)
+        id: gate
+        run: python -m scripts.live.snapshot_gate --season 2026 ${{ inputs.force && '--force' || '' }}
 
       - name: Commit and push snapshot only
+        if: steps.gate.outputs.fire == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
