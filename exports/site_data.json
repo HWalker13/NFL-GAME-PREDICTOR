@@ -21283,7 +21283,7 @@
       "week": 10
     }
   ],
-  "generated_at": "2026-11-12T22:40:16Z",
+  "generated_at": "2026-11-13T22:49:28Z",
   "held_out_2023_24": {
     "game_types": [
       "REG"
@@ -21992,6 +21992,263 @@
       }
     ]
   },
+  "negative_control": {
+    "conditions": [
+      {
+        "check1": {
+          "failing_oracle": null,
+          "verdict": "PASS"
+        },
+        "check2": {
+          "current_67": {
+            "contrast_accuracy": 0.6468,
+            "n_features": 67,
+            "shuffled_mean": 0.4846,
+            "verdict": "PASS"
+          },
+          "phase2_42": {
+            "contrast_accuracy": 0.6245,
+            "n_features": 42,
+            "shuffled_mean": 0.4838,
+            "verdict": "PASS"
+          }
+        },
+        "columns_changed": [],
+        "condition": "clean",
+        "description": "unmodified pipeline",
+        "n_columns_changed": 0,
+        "role": "control"
+      },
+      {
+        "check1": {
+          "failing_oracle": "prior-only oracle on {m}_sd",
+          "verdict": "FAIL"
+        },
+        "check2": {
+          "current_67": {
+            "contrast_accuracy": 0.7175,
+            "n_features": 67,
+            "shuffled_mean": 0.4859,
+            "verdict": "PASS"
+          },
+          "phase2_42": {
+            "contrast_accuracy": 0.6803,
+            "n_features": 42,
+            "shuffled_mean": 0.4862,
+            "verdict": "PASS"
+          }
+        },
+        "columns_changed": [
+          "home_qb_epa_per_db_shrunk",
+          "away_qb_epa_per_db_shrunk",
+          "mu_qb_epa_vs_def",
+          "mu_def_vs_qb_epa",
+          "mu_money_down_edge"
+        ],
+        "condition": "single_metric_sd",
+        "description": "roll_left closed='right' for qb_epa_per_db only",
+        "n_columns_changed": 5,
+        "role": "sabotage"
+      },
+      {
+        "check1": {
+          "failing_oracle": "prior-only oracle on {m}_sd",
+          "verdict": "FAIL"
+        },
+        "check2": {
+          "current_67": {
+            "contrast_accuracy": 0.7026,
+            "n_features": 67,
+            "shuffled_mean": 0.481,
+            "verdict": "PASS"
+          },
+          "phase2_42": {
+            "contrast_accuracy": 0.6654,
+            "n_features": 42,
+            "shuffled_mean": 0.4883,
+            "verdict": "PASS"
+          }
+        },
+        "columns_changed": [
+          "home_qb_epa_per_db_shrunk",
+          "home_qb_success_rate_shrunk",
+          "home_cpoe_shrunk",
+          "home_sack_rate_shrunk",
+          "home_int_rate_shrunk",
+          "home_air_yards_per_att_shrunk",
+          "home_def_epa_per_play_shrunk",
+          "home_def_success_allowed_shrunk",
+          "home_def_pressure_rate_shrunk",
+          "home_def_epa_early_shrunk",
+          "home_def_epa_money_shrunk",
+          "home_games_played_sd",
+          "away_qb_epa_per_db_shrunk",
+          "away_qb_success_rate_shrunk",
+          "away_cpoe_shrunk",
+          "away_sack_rate_shrunk",
+          "away_int_rate_shrunk",
+          "away_air_yards_per_att_shrunk",
+          "away_def_epa_per_play_shrunk",
+          "away_def_success_allowed_shrunk",
+          "away_def_pressure_rate_shrunk",
+          "away_def_epa_early_shrunk",
+          "away_def_epa_money_shrunk",
+          "away_games_played_sd",
+          "mu_qb_epa_vs_def",
+          "mu_def_vs_qb_epa",
+          "mu_success_edge_h",
+          "mu_success_edge_a",
+          "mu_money_down_edge",
+          "mu_protection_edge"
+        ],
+        "condition": "phase2_roll_left",
+        "description": "roll_left closed='right' for every call (Phase 2 reconstruction)",
+        "n_columns_changed": 30,
+        "role": "sabotage"
+      },
+      {
+        "check1": {
+          "failing_oracle": "prior-only oracle on {m}_ewm",
+          "verdict": "FAIL"
+        },
+        "check2": {
+          "current_67": {
+            "contrast_accuracy": 0.8178,
+            "n_features": 67,
+            "shuffled_mean": 0.4855,
+            "verdict": "PASS"
+          },
+          "phase2_42": {
+            "contrast_accuracy": 0.6245,
+            "n_features": 42,
+            "shuffled_mean": 0.4838,
+            "verdict": "PASS"
+          }
+        },
+        "columns_changed": [
+          "home_qb_epa_per_db_ewm",
+          "home_qb_success_rate_ewm",
+          "home_cpoe_ewm",
+          "home_sack_rate_ewm",
+          "home_int_rate_ewm",
+          "home_air_yards_per_att_ewm",
+          "home_def_epa_per_play_ewm",
+          "home_def_success_allowed_ewm",
+          "home_def_pressure_rate_ewm",
+          "home_def_epa_early_ewm",
+          "home_def_epa_money_ewm",
+          "away_qb_epa_per_db_ewm",
+          "away_qb_success_rate_ewm",
+          "away_cpoe_ewm",
+          "away_sack_rate_ewm",
+          "away_int_rate_ewm",
+          "away_air_yards_per_att_ewm",
+          "away_def_epa_per_play_ewm",
+          "away_def_success_allowed_ewm",
+          "away_def_pressure_rate_ewm",
+          "away_def_epa_early_ewm",
+          "away_def_epa_money_ewm"
+        ],
+        "condition": "ewm_only",
+        "description": "roll_ewm without shift(1); roll_left untouched",
+        "n_columns_changed": 22,
+        "role": "sabotage"
+      },
+      {
+        "check1": {
+          "failing_oracle": "prior-only oracle on {m}_sd",
+          "verdict": "FAIL"
+        },
+        "check2": {
+          "current_67": {
+            "contrast_accuracy": 0.7175,
+            "n_features": 67,
+            "shuffled_mean": 0.4866,
+            "verdict": "PASS"
+          },
+          "phase2_42": {
+            "contrast_accuracy": 0.6654,
+            "n_features": 42,
+            "shuffled_mean": 0.4883,
+            "verdict": "PASS"
+          }
+        },
+        "columns_changed": [
+          "home_qb_epa_per_db_shrunk",
+          "home_qb_success_rate_shrunk",
+          "home_cpoe_shrunk",
+          "home_sack_rate_shrunk",
+          "home_int_rate_shrunk",
+          "home_air_yards_per_att_shrunk",
+          "home_def_epa_per_play_shrunk",
+          "home_def_success_allowed_shrunk",
+          "home_def_pressure_rate_shrunk",
+          "home_def_epa_early_shrunk",
+          "home_def_epa_money_shrunk",
+          "home_qb_epa_per_db_ewm",
+          "home_qb_success_rate_ewm",
+          "home_cpoe_ewm",
+          "home_sack_rate_ewm",
+          "home_int_rate_ewm",
+          "home_air_yards_per_att_ewm",
+          "home_def_epa_per_play_ewm",
+          "home_def_success_allowed_ewm",
+          "home_def_pressure_rate_ewm",
+          "home_def_epa_early_ewm",
+          "home_def_epa_money_ewm",
+          "home_games_played_sd",
+          "away_qb_epa_per_db_shrunk",
+          "away_qb_success_rate_shrunk",
+          "away_cpoe_shrunk",
+          "away_sack_rate_shrunk",
+          "away_int_rate_shrunk",
+          "away_air_yards_per_att_shrunk",
+          "away_def_epa_per_play_shrunk",
+          "away_def_success_allowed_shrunk",
+          "away_def_pressure_rate_shrunk",
+          "away_def_epa_early_shrunk",
+          "away_def_epa_money_shrunk",
+          "away_qb_epa_per_db_ewm",
+          "away_qb_success_rate_ewm",
+          "away_cpoe_ewm",
+          "away_sack_rate_ewm",
+          "away_int_rate_ewm",
+          "away_air_yards_per_att_ewm",
+          "away_def_epa_per_play_ewm",
+          "away_def_success_allowed_ewm",
+          "away_def_pressure_rate_ewm",
+          "away_def_epa_early_ewm",
+          "away_def_epa_money_ewm",
+          "away_games_played_sd",
+          "mu_qb_epa_vs_def",
+          "mu_def_vs_qb_epa",
+          "mu_success_edge_h",
+          "mu_success_edge_a",
+          "mu_money_down_edge",
+          "mu_protection_edge"
+        ],
+        "condition": "all_rolling",
+        "description": "every rolling feature includes the current row",
+        "n_columns_changed": 52,
+        "role": "sabotage"
+      }
+    ],
+    "label": "Leakage-check negative control",
+    "note": "Each sabotage deliberately lets a game's own result leak into its rolling features, to show the leakage checks catch it. Check 1 must fail every sabotage. Contrast accuracies under sabotage (some above 70%) are what a leak looks like, not model results. Check 2 (label shuffle) passes every sabotage condition, so on its own it cannot detect this kind of leak.",
+    "seasons": {
+      "check1_rows": "all games 2002-2022",
+      "check2_eval": 2022,
+      "check2_train": "2002-2021",
+      "features_built_from": [
+        2002,
+        2022
+      ],
+      "not_reproduced": "Phase 2 Check 2 (16cb45a) evaluated on 2023-2024; current Check 2 and this script use 2022 only. No 2023+ file is opened."
+    },
+    "source": "audit/out/negative_control.json",
+    "source_git_head": "8f1874406b6b901472807273be3f8bac0a3c8598",
+    "src_dirty": false
+  },
   "prereg_2025": {
     "game_types": [
       "REG"
@@ -22161,10 +22418,10 @@
       "log_loss": 0.6094
     }
   },
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source_commit": {
     "dirty": false,
     "dirty_paths": [],
-    "hash": "fe7a830b17cf43477f13187d50e2e1987a8a646a"
+    "hash": "64c7e5b7f01844057158f4e5a79864c5eac9113f"
   }
 }

@@ -1,10 +1,16 @@
-# `site_data.json` schema (v1.0.0)
+# `site_data.json` schema (v1.1.0)
 
 Written by `python -m scripts.export_site_data` and tested by `python -m scripts.test_export_site_data`.
 This is an export layer only. Every number is recomputed from per-game data with the project's own
 functions and then checked against `audit/out/metrics.json`, `docs/live/SCORECARD_2026.md`,
 `docs/PHASE7_REVIEW.md` (2023-24 McNemar) and `data/processed/holdout_2025_run_record.json` (2025
 McNemar). If any of them disagree, the exporter writes nothing and exits 2.
+
+The `negative_control` block is the exception: it is copied, not recomputed, from
+`audit/out/negative_control.json`, and gated instead (see [`negative_control`](#negative_control)).
+
+**Changelog.** 1.1.0: added the top-level `negative_control` block (additive; no existing field changed).
+1.0.0: first release.
 
 ## Conventions
 
@@ -24,13 +30,14 @@ McNemar). If any of them disagree, the exporter writes nothing and exits 2.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | string | Semver of this schema. Starts at `"1.0.0"`. |
+| `schema_version` | string | Semver of this schema. Currently `"1.1.0"`. |
 | `generated_at` | string | UTC time the export content last changed. |
 | `source_commit` | object | Git state at export time: `hash` (full HEAD hash), `dirty` (true if anything outside `exports/` was uncommitted or untracked), `dirty_paths` (those paths). A `dirty: true` export was built from code or data not in `hash`. |
 | `definitions` | object | Plain-English one-liners for non-technical readers. Keys: `accuracy`, `log_loss`, `brier`, `home_baseline`, `vegas_favorite`, `vegas_implied`, `units`, `roi`, `clv`, `bet_rule`, `ci95`, `mcnemar_p`, `retroactive`, `pre_registered`, `prediction_committed_at`. |
 | `held_out_2023_24` | object | 2023-24 walk-forward test. See [Evaluation block](#evaluation-block-held_out_2023_24-prereg_2025). |
 | `prereg_2025` | object | 2025 pre-registered holdout. Same structure, without `per_season`. |
 | `live_2026` | object | 2026 live shadow mode. See [`live_2026`](#live_2026). |
+| `negative_control` | object | Leakage-check negative control: does Check 1 catch deliberately leaked features? See [`negative_control`](#negative_control). |
 | `games` | array | One entry per game across all three evaluations. See [`games`](#games). |
 
 ## Evaluation block (`held_out_2023_24`, `prereg_2025`)
@@ -108,6 +115,36 @@ McNemar). If any of them disagree, the exporter writes nothing and exits 2.
 Note: the scorecard's checkpoint table labels week 8 "graded" because all of its predicted games
 are graded. Here week 8 is `partial`, because only 1 of its 14 scheduled games was predicted.
 Both labels describe the same fact.
+
+## `negative_control`
+
+Copied from `audit/out/negative_control.json` (written by `python -m audit.scripts.negative_control`).
+Values are the source's, rounded to 4 dp (the source already holds 4 dp). The exporter writes nothing
+and exits 2 if the source has `src_dirty` missing or not `false`, the `clean` condition fails Check 1
+or has a contrast accuracy of 0.70 or more, **any sabotage condition passes Check 1**, or the
+source's own `integrity_gates` verdicts disagree with its per-condition verdicts.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `label` | string | Display name. |
+| `source` | string | `"audit/out/negative_control.json"`. |
+| `source_git_head` | string | Full HEAD hash recorded in the source JSON when the control was run. This is the code the control tested, which can differ from `source_commit.hash`. |
+| `src_dirty` | bool | Always `false` in a written export (`src/` had no uncommitted changes when the control ran). |
+| `seasons` | object | Copied verbatim from the source: `features_built_from` ([first, last]), `check1_rows`, `check2_train`, `check2_eval` (int), `not_reproduced` (what the control did not re-run). No 2023+ season is used. |
+| `conditions` | array | One entry per condition, in the source's order (`clean` first). See [`conditions[]`](#conditions). |
+| `note` | string | Caveat text to show with the block: sabotage contrast accuracies are a leak's signature, not model results. |
+
+### `conditions[]`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `condition` | string | Source condition id: `clean`, `single_metric_sd`, `phase2_roll_left`, `ewm_only`, `all_rolling`. |
+| `role` | string | `control` for `clean`, `sabotage` for every other condition. |
+| `description` | string | What the sabotage changed, in the source's words. |
+| `columns_changed` | string[] | Model input columns whose values differ from the clean build. Empty for `clean`. |
+| `n_columns_changed` | int | Length of `columns_changed`. |
+| `check1` | object | Check 1 (timestamp / prior-games oracle): `verdict` (`PASS` / `FAIL`; always `FAIL` for a sabotage) and `failing_oracle` (the stage that failed, e.g. `prior-only oracle on {m}_ewm`; null on `PASS`). |
+| `check2` | object | Check 2 (label shuffle), keyed `current_67` (the current 67-feature set) and `phase2_42` (the Phase 2 42-feature set). Each has `n_features`, `shuffled_mean` (mean accuracy over 20 shuffled-label fits), `contrast_accuracy` (same model fit on the true labels, scored on 2022) and `verdict`. **`contrast_accuracy` above 0.70 on a sabotage is the leak showing, never a result to report.** |
 
 ## `games`
 
