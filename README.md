@@ -85,6 +85,19 @@ Follow along:
 - **Raw official record:** [`data/live/2026/predictions/`](data/live/2026/predictions/).
 - **Rules:** [`docs/PHASE10_PREREG.md`](docs/PHASE10_PREREG.md).
 
+## Picks site (`site/`)
+
+A small static site with the champion model's straight-up pick for every 2026 game: the current week on `/`, and one page per week at `/week/1/` … `/week/18/`. It reads `exports/site_data.json` (schema ≥ 1.2.0) at build time only and ships plain HTML and CSS, with no client JS and no JSON.
+
+```bash
+python -m scripts.export_site_data      # after committing code: the build refuses a dirty export
+cd site && npm ci
+npm test                                # Vitest, including a full build
+npm run build                           # astro check + astro build -> site/dist/
+```
+
+`NFL_ALLOW_DIRTY=1` previews an export made from uncommitted code locally. **Vercel:** Root Directory = `site/`, framework Astro. Keep "Include files outside the Root Directory in the Build Step" on (the default), because the build reads `../exports/site_data.json`. The site only changes when a new export is committed and pushed.
+
 ## How to run it
 
 **Setup** (Python 3.11 is required: `nfl_data_py` pins `numpy<2` and `pandas<2`, which have no wheels for 3.12+):

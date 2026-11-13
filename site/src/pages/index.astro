@@ -1,0 +1,6 @@
+---
+// The current week (earliest week with a game not yet final), chosen from the data at build time.
+import WeekView from '../components/WeekView.astro';
+import { site } from '../lib/site.ts';
+---
+<WeekView week={site.current} />

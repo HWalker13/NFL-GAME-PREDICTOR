@@ -1,0 +1,43 @@
+/* Tokens. Every text/background pair is checked in tests/contrast.test.ts (WCAG AA, 4.5:1). */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --note: #e9edf3;
+  --text: #16181d;
+  --muted: #5a606b;
+  --line: #d5d9e0;
+  --accent: #0b57d0;
+  --on-accent: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317;
+    --surface: #1b1e24;
+    --note: #252a32;
+    --text: #eceef2;
+    --muted: #a3a9b4;
+    --line: #343a44;
+    --accent: #8ab4f8;
+    --on-accent: #111317;
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.wrap { max-width: 480px; margin: 0 auto; padding-inline: 16px; }
+
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95em; }

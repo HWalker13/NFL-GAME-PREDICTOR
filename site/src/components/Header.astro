@@ -1,0 +1,26 @@
+---
+import { pct } from '../lib/format.ts';
+import type { Site } from '../lib/data.ts';
+
+interface Props {
+  week: number;
+  record: Site['record'];
+}
+const { week, record } = Astro.props;
+---
+<header class="header">
+  <p class="brand"><a href="/">NFL picks</a></p>
+  <h1>Week {week} · 2026</h1>
+  <p class="season">
+    Season: model {record.k} of {record.n} correct ({pct(record.value)}) · Vegas favorite {pct(record.vegasValue)}
+  </p>
+</header>
+
+<style>
+  .header { padding-block: 20px 12px; }
+  .brand { margin: 0; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+  .brand a { color: var(--muted); text-decoration: none; }
+  .brand a:hover { text-decoration: underline; }
+  h1 { margin: 4px 0 6px; font-size: 1.625rem; line-height: 1.2; }
+  .season { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+</style>

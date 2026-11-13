@@ -1,0 +1,10 @@
+---
+import type { GetStaticPaths } from 'astro';
+import WeekView from '../../components/WeekView.astro';
+import { WEEKS } from '../../lib/season.ts';
+
+export const getStaticPaths = (() => WEEKS.map((n) => ({ params: { n: String(n) } }))) satisfies GetStaticPaths;
+
+const week = Number(Astro.params.n);
+---
+<WeekView week={week} />

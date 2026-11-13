@@ -1,0 +1,78 @@
+---
+import { isDimmed, type WeekInfo } from '../lib/season.ts';
+
+interface Props {
+  weeks: WeekInfo[];
+  viewed: number;
+  current: number;
+}
+const { weeks, viewed, current } = Astro.props;
+const label = (w: WeekInfo): string => {
+  const notes: string[] = [];
+  if (w.week === current) notes.push('current week');
+  if (w.kind === 'before-tracking') notes.push('before tracking');
+  if (w.kind === 'missed') notes.push('no picks logged');
+  return `Week ${w.week}${notes.length ? ` (${notes.join(', ')})` : ''}`;
+};
+---
+<nav class="tabs" aria-label="Weeks">
+  <ol>
+    {weeks.map((w) => (
+      <li>
+        <a
+          href={`/week/${w.week}/`}
+          class:list={['tab', { dim: isDimmed(w.kind), now: w.week === current }]}
+          aria-current={w.week === viewed ? 'page' : undefined}
+          aria-label={label(w)}
+        >W{w.week}</a>
+      </li>
+    ))}
+  </ol>
+</nav>
+
+<style>
+  .tabs {
+    overflow-x: auto;
+    margin-inline: -16px;
+    padding: 4px 16px 10px;
+    scroll-padding-inline: 16px;
+    scrollbar-width: thin;
+  }
+  ol { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; width: max-content; }
+  .tab {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+  }
+  .tab:hover { border-color: var(--muted); }
+  .tab.dim { color: var(--muted); border-style: dashed; font-weight: 400; }
+  .tab[aria-current='page'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    border-style: solid;
+    color: var(--on-accent);
+    /* Progressive enhancement: browsers that support it open the strip scrolled to this tab. */
+    scroll-initial-target: nearest;
+  }
+  /* The current week by date: a dot under the number. */
+  .tab.now::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .tab.now[aria-current='page']::after { background: var(--on-accent); }
+</style>

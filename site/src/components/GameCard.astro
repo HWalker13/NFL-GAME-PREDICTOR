@@ -1,0 +1,96 @@
+---
+import { kickoffEt, pct } from '../lib/format.ts';
+import type { Card, CardStatus, TeamRow } from '../lib/card.ts';
+
+interface Props {
+  card: Card;
+}
+const { card } = Astro.props;
+
+const STATUS: Record<CardStatus, { text: string; icon: 'check' | 'cross' | 'dash' | null }> = {
+  correct: { text: 'Correct', icon: 'check' },
+  wrong: { text: 'Wrong', icon: 'cross' },
+  tie: { text: 'Tie', icon: 'dash' },
+  final: { text: 'Final', icon: null },
+  upcoming: { text: 'Not played yet', icon: null },
+  'score-pending': { text: 'Score pending', icon: null },
+};
+const status = STATUS[card.status];
+const rows: TeamRow[] = [card.away, card.home];
+const p = (x: number): string => pct(x, card.decimals);
+---
+<article class="card" aria-label={`${card.away.abbr} at ${card.home.abbr}`}>
+  <div class="top">
+    <time datetime={card.kickoffUtc}>{kickoffEt(card.kickoffUtc)}</time>
+    <span class:list={['status', card.status]}>
+      {status.icon === 'check' && (
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
+      )}
+      {status.icon === 'cross' && (
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+      )}
+      {status.icon === 'dash' && (
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M4 8h8" /></svg>
+      )}
+      {status.text}
+    </span>
+  </div>
+
+  <ul class="teams">
+    {rows.map((t) => (
+      <li class:list={['team', { picked: t.picked, other: card.pick !== null && !t.picked }]}>
+        <span class="abbr">{t.abbr}</span>
+        {t.picked && card.pick && <span class="pick">pick · {p(card.pick.modelProb)}</span>}
+        {t.score !== null && <span class="score">{t.score}</span>}
+      </li>
+    ))}
+  </ul>
+
+  {card.pick && (
+    <p class="vegas">
+      {card.pick.vegasProb === null ? 'Vegas: no line' : `Vegas: ${card.pick.team} ${p(card.pick.vegasProb)}`}
+    </p>
+  )}
+  {card.flag && (
+    <p class="flag">
+      Model rates {card.flag.team} higher than Vegas does ({p(card.flag.modelProb)} vs {p(card.flag.vegasProb)})
+    </p>
+  )}
+</article>
+
+<style>
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .status { display: inline-flex; align-items: center; gap: 4px; }
+  .status.correct, .status.wrong, .status.tie { color: var(--text); font-weight: 600; }
+  .status svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .teams { list-style: none; margin: 8px 0 0; padding: 0; }
+  .team {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding-block: 3px;
+    font-size: 1.0625rem;
+  }
+  .abbr { min-width: 3ch; font-weight: 600; }
+  .team.picked .abbr { color: var(--accent); font-weight: 800; }
+  .team.other { color: var(--muted); }
+  .team.other .abbr { font-weight: 400; }
+  .pick { color: var(--accent); font-size: 0.9375rem; font-weight: 600; }
+  .score { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .vegas, .flag { margin: 6px 0 0; font-size: 0.875rem; }
+  .vegas { color: var(--text); }
+  .flag { color: var(--muted); }
+</style>
