@@ -13,7 +13,8 @@ How the sabotage is applied -- in memory only, nothing in src/ is edited:
   feature build + the two checks, then restores them. Both the frame builder
   (``build_game_features``) and Check 1 (which calls ``F.roll_features``
   internally) look these functions up as module globals, so one patch reaches
-  both. Check 1's independent oracle (``_prior_only_sd``) is NOT patched.
+  both. Check 1's independent oracles (``_prior_only_sd`` and, since
+  Amendment 5, ``_prior_only_ewm``) are NOT patched.
 
 Conditions:
   clean                 real functions, no patch
@@ -27,7 +28,8 @@ Conditions:
                         metrics + games_played_sd.
   ewm_only              roll_ewm drops its shift(1) (current row included);
                         roll_left untouched. Not part of Phase 2 (EWM did not
-                        exist yet); included because Check 1 has no EWM oracle.
+                        exist yet). At 07129c4 this PASSED Check 1 (no EWM
+                        oracle); Amendment 5 added ``_prior_only_ewm``.
   all_rolling           phase2_roll_left + ewm_only together: every rolling
                         feature includes the current row (strongest sabotage).
 
@@ -42,11 +44,15 @@ is patched to open schedules_2002..2022 files only and pbp is pulled for
 evaluate 2022 (its current split). Phase 2's Check 2 evaluated on 2023-24;
 that is NOT reproduced here (test seasons).
 
-Integrity gates (script exits 1 if either fails):
+Integrity gates (script exits 1 if any fails):
   * the clean in-memory rebuild must equal data/processed/game_features.parquet
     restricted to <=2022 on every feature column (label column not read);
   * a second clean build at the end must equal the first (no state leaked
-    between conditions via the memoized pbp).
+    between conditions via the memoized pbp);
+  * Check 1 must PASS the clean condition and FAIL every sabotage condition
+    (``assert_check1_catches_every_sabotage``), so a gap like the pre-Amendment-5
+    EWM one cannot silently reopen. Checked after the JSON is written, so a
+    failing run still leaves its evidence on disk.
 
 Writes audit/out/negative_control.json. Deterministic: label-shuffle seed 0,
 20 shuffles, lbfgs LogisticRegression; no timestamps in the output.
@@ -199,7 +205,8 @@ def run_check1(frame, tgl, cond) -> dict:
             m = re.search(r"(\{.*\})", msg)
             if m and "oracle" in msg:
                 per = ast.literal_eval(m.group(1))
-                out["failed_stage"] = "prior-only oracle on {m}_sd"
+                out["failed_stage"] = ("prior-only oracle on {m}_ewm" if "EWM" in msg
+                                       else "prior-only oracle on {m}_sd")
                 out["n_metrics_mismatched"] = len(per)
                 out["mismatched_rows_per_metric"] = per
             elif "tripwire" in msg:
@@ -226,6 +233,22 @@ def run_check2(frame, schedules, cols_fn) -> dict:
 # --------------------------------------------------------------------------- #
 # Integrity gates
 # --------------------------------------------------------------------------- #
+def check1_gate(results: dict) -> dict:
+    """Check 1 must pass the clean pipeline and catch every sabotage condition."""
+    verdicts = {n: r["check1_timestamp"]["verdict"] for n, r in results.items()}
+    missed = [n for n, v in verdicts.items() if n != "clean" and v != "FAIL"]
+    clean_ok = verdicts.get("clean") == "PASS"
+    return {"pass": clean_ok and not missed, "clean_passes": clean_ok,
+            "sabotage_conditions_not_caught": missed, "verdicts": verdicts}
+
+
+def assert_check1_catches_every_sabotage(gate: dict) -> None:
+    assert gate["clean_passes"], f"Check 1 FAILED the clean pipeline: {gate['verdicts']}"
+    assert not gate["sabotage_conditions_not_caught"], (
+        "Check 1 PASSED sabotage condition(s) "
+        f"{gate['sabotage_conditions_not_caught']}: a current-row leak went undetected. "
+        "Add an independent oracle for the affected features before relying on Check 1."
+    )
 def frames_equal(a: pd.DataFrame, b: pd.DataFrame, cols: list[str]) -> tuple[bool, dict]:
     a = a.sort_values("game_id").reset_index(drop=True)
     b = b.sort_values("game_id").reset_index(drop=True)
@@ -294,6 +317,9 @@ def main() -> int:
     ok2, bad2 = frames_equal(frame2, clean_frame, cols67)
     gates["second_clean_build_identical"] = {"pass": ok2, "mismatches": bad2}
     print(f"GATE second clean build identical: {ok2} {bad2 or ''}")
+    gates["check1_catches_every_sabotage"] = check1_gate(results)
+    print(f"GATE Check 1 passes clean and fails every sabotage: "
+          f"{gates['check1_catches_every_sabotage']['pass']}")
 
     out = {
         "experiment": "negative control for leakage Check 1 (timestamp/oracle) and Check 2 (label shuffle)",
@@ -331,6 +357,7 @@ def main() -> int:
               f"{b['verdict'].split(' ')[0]:<8} {a['true_label_contrast_acc']:>10.4f} "
               f"{b['true_label_contrast_acc']:>10.4f}")
     print(f"\nwrote {OUT.relative_to(ROOT)}")
+    assert_check1_catches_every_sabotage(gates["check1_catches_every_sabotage"])
     return 0 if all(g["pass"] for g in gates.values()) else 1
 
 

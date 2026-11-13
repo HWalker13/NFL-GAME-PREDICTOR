@@ -4,7 +4,8 @@ Implements all four SPEC 5.5 checks:
 
 1. ``check_feature_timestamps`` -- for every game row, assert that every
    feature's newest underlying datum is strictly earlier than that row's kickoff.
-   Raises ``AssertionError`` on any violation.
+   Includes independent prior-only oracles for ``{m}_sd`` and (Amendment 5 of
+   docs/PHASE10_PREREG.md) ``{m}_ewm``. Raises ``AssertionError`` on any violation.
 2. ``label_shuffle_test`` -- permute the training labels only, fit a plain
    ``LogisticRegression`` on the real features, evaluate on the real
    VALIDATION labels (season 2022). A pipeline that carries no label signal
@@ -92,6 +93,49 @@ def _prior_only_sd(log: pd.DataFrame, metric: str) -> pd.Series:
     return g.transform(lambda s: s.shift(1).expanding().mean())
 
 
+def _prior_only_ewm(log: pd.DataFrame, metric: str, halflife: float) -> np.ndarray:
+    """Independent oracle for ``{metric}_ewm`` (Pattern C, Amendment 5 of
+    docs/PHASE10_PREREG.md): exponentially-weighted mean of the metric over the
+    team's strictly-earlier games, all seasons (grouped by team only, no season
+    reset -- the recorded design choice for ``_ewm``).
+
+    Deliberately NOT ``features.roll_ewm`` and not pandas ``.ewm()``: a plain loop
+    that carries a decayed weighted sum, so a bug in one is not mirrored in the
+    other. For a team's game i, with d = 0.5 ** (1 / halflife),
+
+        value_i = sum_{j < i, x_j not NaN} d**(i-1-j) * x_j
+                  / sum_{j < i, x_j not NaN} d**(i-1-j)
+
+    i.e. the most recent prior game has weight 1, the one before d, and so on
+    (positional decay: a NaN game still ages the older ones). NaN if the team has
+    no earlier non-NaN value. Game i's own value is added only AFTER value_i is
+    recorded, which is the exclusion being checked.
+
+    ``log`` must be sorted by (team, kickoff, game_id).
+    """
+    teams = log["team"].to_numpy()
+    kick = log["kickoff"].to_numpy()
+    x = log[metric].to_numpy(dtype="float64")
+    d = 0.5 ** (1.0 / halflife)
+    out = np.full(len(x), np.nan)
+    num = den = 0.0
+    prev_team = None
+    for i in range(len(x)):
+        if teams[i] != prev_team:
+            num = den = 0.0
+            prev_team = teams[i]
+        elif not kick[i - 1] <= kick[i]:
+            raise AssertionError(f"EWM oracle input not in kickoff order at row {i}")
+        if den > 0.0:
+            out[i] = num / den
+        num *= d
+        den *= d
+        if not np.isnan(x[i]):
+            num += x[i]
+            den += 1.0
+    return out
+
+
 def check_feature_timestamps(frame: pd.DataFrame, tgl: pd.DataFrame) -> dict:
     """Assert every feature's newest underlying datum precedes kickoff.
 
@@ -103,6 +147,10 @@ def check_feature_timestamps(frame: pd.DataFrame, tgl: pd.DataFrame) -> dict:
       oracle and assert it matches -- this is what catches a rolling window that
       silently includes the current row (``closed='right'`` / a bare
       ``.rolling().mean()``).
+    * Pattern-C features (``{m}_ewm``, Amendment 5): independently recompute
+      every ``{m}_ewm`` with ``_prior_only_ewm`` (a plain decayed-sum loop, not
+      ``roll_ewm`` or ``.ewm()``) and assert it matches -- this catches an EWM
+      that includes the current game (``.ewm()`` without the ``shift(1)``).
     * Pattern-B features (``_prior`` / ``_league``): the newest contributor is
       the last game of the matched prior season. Assert that season's max
       kickoff ``< kickoff``.
@@ -135,6 +183,28 @@ def check_feature_timestamps(frame: pd.DataFrame, tgl: pd.DataFrame) -> dict:
         raise AssertionError(
             "in-season rolling feature does not match a strictly-prior-games "
             f"oracle (current row is leaking into its own window): {sd_mismatch}"
+        )
+
+    # --- same for {m}_ewm: must match an independent prior-only EWM oracle ----
+    # (Amendment 5: the negative control at 07129c4 showed an unshifted roll_ewm
+    # passed Check 1, which until then had no oracle for the _ewm columns.)
+    ewm_mismatch = {}
+    ewm_max_abs_diff = 0.0
+    for m in F.RAW_METRICS:
+        oracle = _prior_only_ewm(olog, m, F.EWM_HALFLIFE)
+        got = olog[f"{m}_ewm"].to_numpy(dtype="float64")
+        both_nan = np.isnan(oracle) & np.isnan(got)
+        close = np.isclose(oracle, got, rtol=1e-6, atol=1e-9, equal_nan=True)
+        bad = int((~(close | both_nan)).sum())
+        if bad:
+            ewm_mismatch[m] = bad
+        finite = np.isfinite(oracle) & np.isfinite(got)
+        if finite.any():
+            ewm_max_abs_diff = max(ewm_max_abs_diff, float(np.abs(oracle[finite] - got[finite]).max()))
+    if ewm_mismatch:
+        raise AssertionError(
+            "EWM feature does not match a strictly-prior-games EWM oracle "
+            f"(current row is leaking into its own weighted average): {ewm_mismatch}"
         )
 
     # season max kickoff over strictly-earlier seasons, per team
@@ -214,9 +284,13 @@ def check_feature_timestamps(frame: pd.DataFrame, tgl: pd.DataFrame) -> dict:
         "min_prev_game_lag_days": round(float(np.nanmin(lags)), 3),
         "max_rolled_vs_current_corr": round(float(max_corr), 3),
         "worst_corr_feature": worst,
+        "ewm_oracle_metrics": len(F.RAW_METRICS),
+        "ewm_oracle_max_abs_diff": float(f"{ewm_max_abs_diff:.3e}"),
     }
     print(
         f"CHECK 1  PASS: {result['rows']:,} rows, 0 timestamp violations, "
+        f"_sd + _ewm oracles match ({result['ewm_oracle_metrics']} metrics each; "
+        f"max |ewm diff| = {result['ewm_oracle_max_abs_diff']}), "
         f"min prev-game lag = {result['min_prev_game_lag_days']} days, "
         f"max(rolled vs current-game raw) corr = {result['max_rolled_vs_current_corr']} "
         f"({worst})"
