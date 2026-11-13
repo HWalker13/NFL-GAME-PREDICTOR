@@ -10,7 +10,7 @@ EXPORT LAYER ONLY. Trains nothing, predicts nothing, grades nothing. It reads:
   data/processed/holdout_2025_run_record.json           (2025 McNemar record: cross-check target)
   data/raw/schedules_{2023,2024,2025}.parquet           (scores, kickoffs, nflverse lines)
   data/live/2026/predictions/*.csv, data/live/2026/graded/*.csv   (the official live record)
-  latest data/raw/snapshots/schedules_2026_*.parquet    (2026 schedule: weeks, kickoffs)
+  latest data/raw/snapshots/schedules_2026_*.parquet    (2026 schedule: weeks, kickoffs, scores)
   docs/live/SCORECARD_2026.md                           (live numbers: cross-check target)
   audit/out/negative_control.json                       (leakage-check negative control: copied, gated)
 and git metadata (HEAD, working-tree state, the commit that added each prediction file).
@@ -54,7 +54,7 @@ from scripts.live import common as C
 from scripts.live import scorecard as SC
 
 ROOT = C.PROJECT_ROOT
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 EXPORT_DIR = ROOT / "exports"
 OUT_PATH = EXPORT_DIR / "site_data.json"
 METRICS_PATH = ROOT / "audit" / "out" / "metrics.json"
@@ -630,6 +630,7 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
         "label": "2026 live shadow mode (paper trading, no real money)",
         "as_of_utc": C.iso(as_of), "as_of_source": f"latest schedule snapshot {snap.name}",
         "first_official_week": FIRST_OFFICIAL_WEEK,
+        "edge_threshold": C.EDGE_THRESHOLD,
         "games_logged": int(len(champ_pred)), "games_graded": int(len(champ_all)),
         "games_decided": int(SC.decided(champ_all).shape[0]),
         "ties": int((champ_all["result"] == "tie").sum()),
@@ -646,6 +647,33 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
     }
     check_live(block, graded, predicted, schedule, as_of, metrics["live_2026"], errs)
     return block, games
+
+
+def schedule_2026(live_games: list[dict], errs: list[str]) -> list[dict]:
+    """Every 2026 REG game from the latest schedule snapshot (the source the live
+    pipeline uses), with the same kickoff definition. Refuses (via errs) if any
+    live game is missing or disagrees on week or teams."""
+    from src import live_features as LF
+    s = LF.season_schedule_with_kickoff(pd.read_parquet(C.latest_snapshot(LIVE_SEASON)), LIVE_SEASON)
+    out = []
+    for r in s.to_dict("records"):
+        played = not (pd.isna(r["home_score"]) or pd.isna(r["away_score"]))
+        out.append({"game_id": r["game_id"], "week": int(r["week"]), "kickoff_utc": C.iso(r["kickoff"]),
+                    "away": r["away_team"], "home": r["home_team"],
+                    "away_score": int(r["away_score"]) if played else None,
+                    "home_score": int(r["home_score"]) if played else None})
+    out.sort(key=lambda g: (g["week"], g["kickoff_utc"], g["game_id"]))
+    by_id = {g["game_id"]: g for g in out}
+    if len(by_id) != len(out):
+        errs.append("schedule_2026: duplicate game_id in the schedule snapshot")
+    for g in live_games:
+        sg = by_id.get(g["game_id"])
+        if sg is None:
+            errs.append(f"schedule_2026: live game {g['game_id']} is not in the 2026 schedule snapshot")
+        elif (sg["week"], sg["away"], sg["home"]) != (g["week"], g["away"], g["home"]):
+            errs.append(f"schedule_2026: live game {g['game_id']} week/teams {(g['week'], g['away'], g['home'])} "
+                        f"vs schedule {(sg['week'], sg['away'], sg['home'])}")
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -799,6 +827,7 @@ def build_payload(generated_at: str) -> dict:
     hw, p25, hist_games_ = held_out(errs, metrics)
     live_block, live_games = live(errs, metrics)
     nc = negative_control(errs)
+    sched26 = schedule_2026(live_games, errs)
     games = sorted(hist_games_ + live_games, key=lambda g: (g["season"], g["week"], g["kickoff_utc"], g["game_id"]))
     for g in games:   # invariant the site relies on
         if g["bet_units"] is not None and not g["bet"]:
@@ -814,6 +843,7 @@ def build_payload(generated_at: str) -> dict:
         "prereg_2025": p25,
         "live_2026": live_block,
         "negative_control": nc,
+        "schedule_2026": sched26,
         "games": games,
     }
 

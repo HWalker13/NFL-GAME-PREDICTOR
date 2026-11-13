@@ -328,6 +328,59 @@ class NegativeControl(unittest.TestCase):
                 self.assertEqual(E.negative_control([])["source_git_head"], "0" * 40)
 
 
+class Schedule2026(unittest.TestCase):
+    """schedule_2026 == the latest 2026 snapshot; every live game is in it; missing live games are refused."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = _load()
+        cls.sched = cls.d["schedule_2026"]
+        cls.live = [g for g in cls.d["games"] if g["evaluation"] == "live_2026"]
+
+    def test_every_live_game_in_schedule(self):
+        by = {g["game_id"]: g for g in self.sched}
+        for g in self.live:
+            with self.subTest(game=g["game_id"]):
+                self.assertIn(g["game_id"], by)
+                s = by[g["game_id"]]
+                self.assertEqual((s["week"], s["away"], s["home"]), (g["week"], g["away"], g["home"]))
+                self.assertEqual(s["kickoff_utc"], g["kickoff_utc"])
+                if g["result"] != "pending":   # graded scores agree with the schedule's
+                    self.assertEqual((s["away_score"], s["home_score"]), (g["away_score"], g["home_score"]))
+
+    def test_matches_snapshot(self):
+        snap = SC.load_schedule_kickoffs(E.LIVE_SEASON)
+        self.assertEqual(len(self.sched), len(snap))
+        self.assertEqual(sorted(g["game_id"] for g in self.sched), sorted(snap["game_id"]))
+        self.assertEqual(sorted({g["week"] for g in self.sched}), list(range(1, 19)))
+        keys = [(g["week"], g["kickoff_utc"], g["game_id"]) for g in self.sched]
+        self.assertEqual(keys, sorted(keys))
+        for g in self.sched:   # scores come in pairs
+            self.assertEqual(g["away_score"] is None, g["home_score"] is None, g["game_id"])
+
+    def test_edge_threshold_from_rule(self):
+        self.assertEqual(self.d["live_2026"]["edge_threshold"], C.EDGE_THRESHOLD)
+
+    def test_guard_flags_missing_live_game(self):
+        bogus = dict(self.live[0], game_id="2026_99_XXX_YYY")
+        errs: list[str] = []
+        E.schedule_2026([bogus], errs)
+        self.assertTrue(any("2026_99_XXX_YYY" in e for e in errs), errs)
+        errs = []
+        E.schedule_2026([dict(self.live[0], home="ZZZ")], errs)
+        self.assertTrue(any(self.live[0]["game_id"] in e for e in errs), errs)
+
+    def test_refuses_missing_live_game(self):
+        orig = E.schedule_2026
+        bogus = dict(self.live[0], game_id="2026_99_XXX_YYY")
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / "out.json"
+            with mock.patch.object(E, "schedule_2026", lambda lg, errs: orig(lg + [bogus], errs)), \
+                    mock.patch("sys.stderr"):
+                self.assertEqual(E.main(["--out", str(out)]), 2)
+            self.assertFalse(out.exists())
+
+
 class DeterminismAndGuards(unittest.TestCase):
 
     def test_byte_identical_rebuild(self):
@@ -367,7 +420,8 @@ class DeterminismAndGuards(unittest.TestCase):
             | set(d["negative_control"]) | set(d["negative_control"]["conditions"][0]) \
             | set(d["negative_control"]["conditions"][0]["check1"]) \
             | set(d["negative_control"]["conditions"][0]["check2"]) \
-            | set(d["negative_control"]["conditions"][0]["check2"]["current_67"])
+            | set(d["negative_control"]["conditions"][0]["check2"]["current_67"]) \
+            | set(d["schedule_2026"][0])
         missing = sorted(k for k in keys if f"`{k}`" not in schema)
         self.assertEqual(missing, [])
 
