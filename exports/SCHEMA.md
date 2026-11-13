@@ -1,4 +1,4 @@
-# `site_data.json` schema (v1.1.0)
+# `site_data.json` schema (v1.2.0)
 
 Written by `python -m scripts.export_site_data` and tested by `python -m scripts.test_export_site_data`.
 This is an export layer only. Every number is recomputed from per-game data with the project's own
@@ -9,7 +9,8 @@ McNemar). If any of them disagree, the exporter writes nothing and exits 2.
 The `negative_control` block is the exception: it is copied, not recomputed, from
 `audit/out/negative_control.json`, and gated instead (see [`negative_control`](#negative_control)).
 
-**Changelog.** 1.1.0: added the top-level `negative_control` block (additive; no existing field changed).
+**Changelog.** 1.2.0: added the top-level `schedule_2026` block and `live_2026.edge_threshold`
+(additive; no existing field changed). 1.1.0: added the top-level `negative_control` block (additive; no existing field changed).
 1.0.0: first release.
 
 ## Conventions
@@ -30,7 +31,7 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | string | Semver of this schema. Currently `"1.1.0"`. |
+| `schema_version` | string | Semver of this schema. Currently `"1.2.0"`. |
 | `generated_at` | string | UTC time the export content last changed. |
 | `source_commit` | object | Git state at export time: `hash` (full HEAD hash), `dirty` (true if anything outside `exports/` was uncommitted or untracked), `dirty_paths` (those paths). A `dirty: true` export was built from code or data not in `hash`. |
 | `definitions` | object | Plain-English one-liners for non-technical readers. Keys: `accuracy`, `log_loss`, `brier`, `home_baseline`, `vegas_favorite`, `vegas_implied`, `units`, `roi`, `clv`, `bet_rule`, `ci95`, `mcnemar_p`, `retroactive`, `pre_registered`, `prediction_committed_at`. |
@@ -38,6 +39,7 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 | `prereg_2025` | object | 2025 pre-registered holdout. Same structure, without `per_season`. |
 | `live_2026` | object | 2026 live shadow mode. See [`live_2026`](#live_2026). |
 | `negative_control` | object | Leakage-check negative control: does Check 1 catch deliberately leaked features? See [`negative_control`](#negative_control). |
+| `schedule_2026` | array | Every 2026 regular-season game, played or not. See [`schedule_2026`](#schedule_2026). |
 | `games` | array | One entry per game across all three evaluations. See [`games`](#games). |
 
 ## Evaluation block (`held_out_2023_24`, `prereg_2025`)
@@ -86,6 +88,7 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 | `as_of_utc` | string | Pull time of the latest 2026 schedule snapshot. Week statuses are judged at this time. |
 | `as_of_source` | string | That snapshot's filename. |
 | `first_official_week` | int | 3 (Amendment 1). Weeks 1-2 came before shadow mode began and are not part of the record. |
+| `edge_threshold` | float | The bet rule's threshold (`scripts/live/common.py` `EDGE_THRESHOLD`, 0.04): a side qualifies when model P(win) minus vig-free market P(win) is at least this. Compare at full precision; the 4 dp probabilities in `games` can round a borderline edge either way, so `bet` is authoritative for live games. |
 | `games_logged` | int | Champion predictions logged, including pending games. |
 | `games_graded` / `games_decided` / `ties` / `games_pending` | int | Graded = decided + ties. Pending = logged but not yet graded or without a final score. |
 | `line_timing` | string | Live lines are the snapshot saved when the prediction was logged, not the close. |
@@ -145,6 +148,20 @@ source's own `integrity_gates` verdicts disagree with its per-condition verdicts
 | `n_columns_changed` | int | Length of `columns_changed`. |
 | `check1` | object | Check 1 (timestamp / prior-games oracle): `verdict` (`PASS` / `FAIL`; always `FAIL` for a sabotage) and `failing_oracle` (the stage that failed, e.g. `prior-only oracle on {m}_ewm`; null on `PASS`). |
 | `check2` | object | Check 2 (label shuffle), keyed `current_67` (the current 67-feature set) and `phase2_42` (the Phase 2 42-feature set). Each has `n_features`, `shuffled_mean` (mean accuracy over 20 shuffled-label fits), `contrast_accuracy` (same model fit on the true labels, scored on 2022) and `verdict`. **`contrast_accuracy` above 0.70 on a sabotage is the leak showing, never a result to report.** |
+
+## `schedule_2026`
+
+Every regular-season game in the latest 2026 schedule snapshot (the file the live pipeline reads), with
+the same kickoff definition predict/grade use. Ordered by (`week`, `kickoff_utc`, `game_id`). The
+exporter writes nothing and exits 2 if any `live_2026` game is missing here or disagrees on week or teams.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `game_id` | string | nflverse id. |
+| `week` | int | 1-18. |
+| `kickoff_utc` | string | Scheduled kickoff (UTC). |
+| `away`, `home` | string | Team abbreviations. |
+| `away_score`, `home_score` | int \| null | Final score as of the snapshot. Both null until the game has a final score. |
 
 ## `games`
 
