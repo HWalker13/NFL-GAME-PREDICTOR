@@ -1,10 +1,10 @@
 {
   "experiment": "negative control for leakage Check 1 (timestamp/oracle) and Check 2 (label shuffle)",
-  "git_head": "8832fabf9d87cf924751932533b2b729131b9a2f",
+  "git_head": "8f1874406b6b901472807273be3f8bac0a3c8598",
   "src_dirty": false,
   "sha256": {
     "src/features.py": "6be77b8d3547da6b9b64586bb104e61633a83221d82e249a705ed003ef156de7",
-    "src/leakage_checks.py": "b47f91298353da7405c6621920daf0a4cbed6c211ffa89259dccc37e7b3012ae"
+    "src/leakage_checks.py": "2c53139737837bc2bcb3048cda09218cb452be84ac68e884f0833f4c9105503d"
   },
   "phase2_reference_commit": "16cb45a",
   "sabotage_method": "in-memory unittest.mock.patch.object of src.features.roll_left / roll_ewm with sabotaged copies; src/ unmodified",
@@ -148,6 +148,18 @@
     "second_clean_build_identical": {
       "pass": true,
       "mismatches": {}
+    },
+    "check1_catches_every_sabotage": {
+      "pass": true,
+      "clean_passes": true,
+      "sabotage_conditions_not_caught": [],
+      "verdicts": {
+        "clean": "PASS",
+        "single_metric_sd": "FAIL",
+        "phase2_roll_left": "FAIL",
+        "ewm_only": "FAIL",
+        "all_rolling": "FAIL"
+      }
     }
   },
   "conditions": {
@@ -162,7 +174,9 @@
         "violations": 0,
         "min_prev_game_lag_days": 3.674,
         "max_rolled_vs_current_corr": 0.388,
-        "worst_corr_feature": "home_def_pressure_rate"
+        "worst_corr_feature": "home_def_pressure_rate",
+        "ewm_oracle_metrics": 11,
+        "ewm_oracle_max_abs_diff": 8.882e-15
       },
       "check2_label_shuffle_current_67": {
         "shuffled_mean": 0.4846,
@@ -381,13 +395,24 @@
         "away_def_epa_money_ewm"
       ],
       "check1_timestamp": {
-        "verdict": "PASS",
-        "caught": false,
-        "rows": 5393,
-        "violations": 0,
-        "min_prev_game_lag_days": 3.674,
-        "max_rolled_vs_current_corr": 0.388,
-        "worst_corr_feature": "home_def_pressure_rate"
+        "verdict": "FAIL",
+        "caught": true,
+        "message": "EWM feature does not match a strictly-prior-games EWM oracle (current row is leaking into its own weighted average): {'qb_epa_per_db': 10786, 'qb_success_rate': 10786, 'cpoe': 8729, 'sack_rate': 10786, 'int_rate': 10781, 'air_yards_per_att': 8740, 'def_epa_per_play': 10786, 'def_success_allowed': 10786, 'def_pressure_rate': 10784, 'def_epa_early': 10786, 'def_epa_money': 10786}",
+        "failed_stage": "prior-only oracle on {m}_ewm",
+        "n_metrics_mismatched": 11,
+        "mismatched_rows_per_metric": {
+          "qb_epa_per_db": 10786,
+          "qb_success_rate": 10786,
+          "cpoe": 8729,
+          "sack_rate": 10786,
+          "int_rate": 10781,
+          "air_yards_per_att": 8740,
+          "def_epa_per_play": 10786,
+          "def_success_allowed": 10786,
+          "def_pressure_rate": 10784,
+          "def_epa_early": 10786,
+          "def_epa_money": 10786
+        }
       },
       "check2_label_shuffle_current_67": {
         "shuffled_mean": 0.4855,
