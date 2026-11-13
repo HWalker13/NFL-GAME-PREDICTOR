@@ -12,6 +12,7 @@ EXPORT LAYER ONLY. Trains nothing, predicts nothing, grades nothing. It reads:
   data/live/2026/predictions/*.csv, data/live/2026/graded/*.csv   (the official live record)
   latest data/raw/snapshots/schedules_2026_*.parquet    (2026 schedule: weeks, kickoffs)
   docs/live/SCORECARD_2026.md                           (live numbers: cross-check target)
+  audit/out/negative_control.json                       (leakage-check negative control: copied, gated)
 and git metadata (HEAD, working-tree state, the commit that added each prediction file).
 
 Every number is recomputed from per-game data with the project's own functions
@@ -19,6 +20,9 @@ Every number is recomputed from per-game data with the project's own functions
 compared with audit/out/metrics.json, docs/live/SCORECARD_2026.md and the
 recorded McNemar values. ANY disagreement -> nothing is written, every
 discrepancy is printed, exit code 2. It never picks one number over another.
+The negative-control block is copied (not recomputed) from its source JSON and
+refused the same way if that file is marked dirty, the clean condition fails
+Check 1 or tops 70% contrast accuracy, or any sabotage condition passes Check 1.
 
 Determinism: sorted keys, floats rounded to 4 dp, games ordered by
 (season, week, kickoff_utc, game_id). The live "as of" time is the latest 2026
@@ -50,7 +54,7 @@ from scripts.live import common as C
 from scripts.live import scorecard as SC
 
 ROOT = C.PROJECT_ROOT
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 EXPORT_DIR = ROOT / "exports"
 OUT_PATH = EXPORT_DIR / "site_data.json"
 METRICS_PATH = ROOT / "audit" / "out" / "metrics.json"
@@ -58,6 +62,9 @@ SCORECARD_PATH = ROOT / "docs" / "live" / "SCORECARD_2026.md"
 WALKFORWARD_PATH = ROOT / "data" / "processed" / "walkforward_test_predictions.parquet"
 HOLDOUT_2025_PATH = ROOT / "data" / "processed" / "holdout_2025_predictions.parquet"
 HOLDOUT_2025_RECORD = ROOT / "data" / "processed" / "holdout_2025_run_record.json"
+NEGATIVE_CONTROL_PATH = ROOT / "audit" / "out" / "negative_control.json"
+NC_CLEAN = "clean"                 # the one unsabotaged condition; every other condition is a sabotage
+NC_FEATURE_SETS = {"current_67": "check2_label_shuffle_current_67", "phase2_42": "check2_label_shuffle_phase2_42"}
 LIVE_ROOT = C.OFFICIAL_ROOT        # read only
 LIVE_SEASON = 2026
 FIRST_OFFICIAL_WEEK = 3            # docs/PHASE10_PREREG.md, Amendment 1
@@ -406,6 +413,67 @@ def hist_games(df: pd.DataFrame, evaluation: str) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
+# Leakage-check negative control (audit/out/negative_control.json)
+# --------------------------------------------------------------------------- #
+def negative_control(errs: list[str]) -> dict:
+    """Copy the negative-control results; refuse (via errs) a dirty or non-failing control."""
+    src = json.loads(NEGATIVE_CONTROL_PATH.read_text())
+    where = "negative_control.json"
+    if src.get("src_dirty") is not False:      # missing or true -> refuse
+        errs.append(f"{where}: src_dirty is {src.get('src_dirty')!r}; re-run the control on a clean src/")
+    conds = src["conditions"]
+    if NC_CLEAN not in conds:
+        errs.append(f"{where}: no '{NC_CLEAN}' condition")
+    if not [n for n in conds if n != NC_CLEAN]:
+        errs.append(f"{where}: no sabotage conditions")
+    gate_verdicts = src["integrity_gates"]["check1_catches_every_sabotage"]["verdicts"]
+    out_conds = []
+    for name, c in conds.items():          # source order (clean first), deterministic for a given file
+        c1 = c["check1_timestamp"]
+        sabotage = name != NC_CLEAN
+        if sabotage and (c1["verdict"] != "FAIL" or c1["caught"] is not True):
+            errs.append(f"{where}: sabotage condition '{name}' PASSES Check 1 "
+                        f"(verdict {c1['verdict']!r}, caught {c1['caught']!r}); the control is not failing")
+        if not sabotage and (c1["verdict"] != "PASS" or c1["caught"] is not False):
+            errs.append(f"{where}: clean condition fails Check 1 (verdict {c1['verdict']!r})")
+        if gate_verdicts.get(name) != c1["verdict"]:
+            errs.append(f"{where}: integrity_gates verdict for '{name}' {gate_verdicts.get(name)!r} "
+                        f"vs condition verdict {c1['verdict']!r}")
+        check2 = {}
+        for fs, key in NC_FEATURE_SETS.items():
+            c2 = c[key]
+            if not sabotage and c2["true_label_contrast_acc"] >= 0.70:   # CLAUDE.md / SPEC 5.6
+                errs.append(f"{where}: clean contrast accuracy {c2['true_label_contrast_acc']} ({fs}) >= 0.70")
+            check2[fs] = {"n_features": c2["n_features"], "shuffled_mean": c2["shuffled_mean"],
+                          "contrast_accuracy": c2["true_label_contrast_acc"], "verdict": c2["verdict"]}
+        out_conds.append({
+            "condition": name, "role": "sabotage" if sabotage else "control",
+            "description": c["description"],
+            "columns_changed": list(c["model_columns_changed_vs_clean"]),
+            "n_columns_changed": len(c["model_columns_changed_vs_clean"]),
+            "check1": {"verdict": c1["verdict"],
+                       "failing_oracle": c1.get("failed_stage") if c1["verdict"] == "FAIL" else None},
+            "check2": check2,
+        })
+    c2_sab = [v["verdict"] for c in out_conds if c["role"] == "sabotage" for v in c["check2"].values()]
+    c2_text = ("Check 2 (label shuffle) passes every sabotage condition, so on its own it cannot detect "
+               "this kind of leak." if c2_sab and all(v == "PASS" for v in c2_sab) else
+               "Check 2 (label shuffle) verdicts are listed per condition.")
+    return {
+        "label": "Leakage-check negative control",
+        "source": (NEGATIVE_CONTROL_PATH.relative_to(ROOT).as_posix()
+                   if NEGATIVE_CONTROL_PATH.is_relative_to(ROOT) else str(NEGATIVE_CONTROL_PATH)),
+        "source_git_head": src["git_head"],
+        "src_dirty": src.get("src_dirty"),
+        "seasons": src["seasons"],
+        "conditions": out_conds,
+        "note": ("Each sabotage deliberately lets a game's own result leak into its rolling features, to show "
+                 "the leakage checks catch it. Check 1 must fail every sabotage. Contrast accuracies under "
+                 "sabotage (some above 70%) are what a leak looks like, not model results. " + c2_text),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Live 2026
 # --------------------------------------------------------------------------- #
 def load_live_predictions() -> pd.DataFrame:
@@ -730,6 +798,7 @@ def build_payload(generated_at: str) -> dict:
     metrics = json.loads(METRICS_PATH.read_text())
     hw, p25, hist_games_ = held_out(errs, metrics)
     live_block, live_games = live(errs, metrics)
+    nc = negative_control(errs)
     games = sorted(hist_games_ + live_games, key=lambda g: (g["season"], g["week"], g["kickoff_utc"], g["game_id"]))
     for g in games:   # invariant the site relies on
         if g["bet_units"] is not None and not g["bet"]:
@@ -744,6 +813,7 @@ def build_payload(generated_at: str) -> dict:
         "held_out_2023_24": hw,
         "prereg_2025": p25,
         "live_2026": live_block,
+        "negative_control": nc,
         "games": games,
     }
 

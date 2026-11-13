@@ -248,6 +248,86 @@ class GameInvariants(unittest.TestCase):
         self.assertAlmostEqual(sum(g["bet_units"] for g in live), _load()["live_2026"]["official_bets"]["units"], 2)
 
 
+class NegativeControl(unittest.TestCase):
+    """negative_control block == audit/out/negative_control.json; dirty or non-failing controls are refused."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = _load()["negative_control"]
+        cls.src = json.loads(E.NEGATIVE_CONTROL_PATH.read_text())
+
+    def test_values_match_source(self):
+        self.assertEqual(self.d["source_git_head"], self.src["git_head"])
+        self.assertIs(self.d["src_dirty"], False)
+        self.assertEqual(self.d["seasons"], self.src["seasons"])
+        self.assertEqual([c["condition"] for c in self.d["conditions"]], list(self.src["conditions"]))
+        for c in self.d["conditions"]:
+            s = self.src["conditions"][c["condition"]]
+            with self.subTest(condition=c["condition"]):
+                self.assertEqual(c["role"], "control" if c["condition"] == "clean" else "sabotage")
+                self.assertEqual(c["description"], s["description"])
+                self.assertEqual(c["columns_changed"], s["model_columns_changed_vs_clean"])
+                self.assertEqual(c["n_columns_changed"], len(s["model_columns_changed_vs_clean"]))
+                s1 = s["check1_timestamp"]
+                self.assertEqual(c["check1"]["verdict"], s1["verdict"])
+                self.assertEqual(c["check1"]["failing_oracle"], s1.get("failed_stage"))
+                for fs, n in (("current_67", 67), ("phase2_42", 42)):
+                    s2, e2 = s[f"check2_label_shuffle_{fs}"], c["check2"][fs]
+                    self.assertEqual(e2["n_features"], n)
+                    self.assertEqual(e2["n_features"], s2["n_features"])
+                    self.assertEqual(e2["shuffled_mean"], _r4(s2["shuffled_mean"]))
+                    self.assertEqual(e2["contrast_accuracy"], _r4(s2["true_label_contrast_acc"]))
+                    self.assertEqual(e2["verdict"], s2["verdict"])
+
+    def test_every_sabotage_fails_check1(self):
+        roles = {c["role"] for c in self.d["conditions"]}
+        self.assertEqual(roles, {"control", "sabotage"})
+        for c in self.d["conditions"]:
+            want = "PASS" if c["role"] == "control" else "FAIL"
+            self.assertEqual(c["check1"]["verdict"], want, c["condition"])
+            if c["role"] == "sabotage":
+                self.assertTrue(c["check1"]["failing_oracle"], c["condition"])
+                self.assertGreater(c["n_columns_changed"], 0, c["condition"])
+
+    def _refused(self, mutate) -> None:
+        src = json.loads(E.NEGATIVE_CONTROL_PATH.read_text())
+        mutate(src)
+        with tempfile.TemporaryDirectory() as t:
+            bad, out = Path(t) / "negative_control.json", Path(t) / "out.json"
+            bad.write_text(json.dumps(src))
+            with mock.patch.object(E, "NEGATIVE_CONTROL_PATH", bad), mock.patch("sys.stderr"):
+                self.assertEqual(E.main(["--out", str(out)]), 2)
+            self.assertFalse(out.exists())
+
+    def test_refuses_dirty_control(self):
+        def dirty(s):
+            s["src_dirty"] = True
+        self._refused(dirty)
+
+    def test_refuses_missing_dirty_flag(self):
+        self._refused(lambda s: s.pop("src_dirty"))
+
+    def test_refuses_sabotage_passing_check1(self):
+        # each sabotage in turn passes Check 1 (ewm_only = the pre-Amendment-5 state); the gate summary
+        # is updated to match, so only the "sabotage passes" guard can catch it
+        for name in [n for n in json.loads(E.NEGATIVE_CONTROL_PATH.read_text())["conditions"] if n != "clean"]:
+            with self.subTest(condition=name):
+                def passes(s, name=name):
+                    s["conditions"][name]["check1_timestamp"].update(verdict="PASS", caught=False)
+                    s["integrity_gates"]["check1_catches_every_sabotage"]["verdicts"][name] = "PASS"
+                self._refused(passes)
+
+    def test_reads_source_not_hardcoded(self):
+        # a different (still valid) git head flows straight through
+        src = json.loads(E.NEGATIVE_CONTROL_PATH.read_text())
+        src["git_head"] = "0" * 40
+        with tempfile.TemporaryDirectory() as t:
+            f = Path(t) / "negative_control.json"
+            f.write_text(json.dumps(src))
+            with mock.patch.object(E, "NEGATIVE_CONTROL_PATH", f):
+                self.assertEqual(E.negative_control([])["source_git_head"], "0" * 40)
+
+
 class DeterminismAndGuards(unittest.TestCase):
 
     def test_byte_identical_rebuild(self):
@@ -283,7 +363,11 @@ class DeterminismAndGuards(unittest.TestCase):
         schema = (E.EXPORT_DIR / "SCHEMA.md").read_text()
         d = _load()
         keys = set(d) | set(d["games"][0]) | {k for g in d["games"] for k in g} | set(d["live_2026"]) \
-            | set(d["live_2026"]["weeks"][0]) | set(d["held_out_2023_24"]) | set(d["definitions"])
+            | set(d["live_2026"]["weeks"][0]) | set(d["held_out_2023_24"]) | set(d["definitions"]) \
+            | set(d["negative_control"]) | set(d["negative_control"]["conditions"][0]) \
+            | set(d["negative_control"]["conditions"][0]["check1"]) \
+            | set(d["negative_control"]["conditions"][0]["check2"]) \
+            | set(d["negative_control"]["conditions"][0]["check2"]["current_67"])
         missing = sorted(k for k in keys if f"`{k}`" not in schema)
         self.assertEqual(missing, [])
 
