@@ -63,7 +63,11 @@ describe('build output', () => {
       const t = text(f);
       expect(t, f).toMatch(/NFL picks/);
       expect(t, f).toMatch(/Week \d+ · 2026/);
-      expect(t, f).toMatch(/Season: model \d+ of \d+ correct \(\d+%\) · Vegas favorite \d+%/);
+      const ts = t.replace(/\s+/g, ' ');
+      expect(ts, f).toMatch(/Picks \d+–\d+ \d+% accuracy Vegas favorite \d+%/);
+      expect(ts, f).toMatch(/Value calls \d+–\d+(?: \d+ push(?:es)?)? \d+% hit rate Vegas expected \d+%/);
+      expect(ts, f).toContain('Small sample — read this as a trend, not proof.');
+      expect(html(f), f).toMatch(/<a href="https:\/\/holden-anderson\.vercel\.app\/projects\/nfl-game-predictor\/results\/"[^>]*>Small sample/);
       expect(t, f).toContain('Paper picks for a machine-learning project. Not betting advice.');
       expect(t, f).toContain("Vegas % is the market's implied win chance at the time the pick was logged.");
       expect(html(f), f).toMatch(/href="https:\/\/github.com\/HWalker13\/NFL-GAME-PREDICTOR\/commit\/[0-9a-f]{40}"/);
@@ -91,14 +95,77 @@ describe('build output', () => {
     expect(text('week/8/index.html')).toContain('Picks were logged for 1 of 14 games this week.');
     expect(text('week/9/index.html')).toContain('No picks were logged this week.');
     expect(text('week/12/index.html')).toContain("Picks will appear here once they're logged.");
-    expect(text('week/7/index.html')).toMatch(/Correct/);
-    expect(text('week/7/index.html')).toMatch(/Model rates [A-Z]{2,3} higher than Vegas does \(\d+% vs \d+%\)/);
     expect(text('week/10/index.html')).toContain('Not played yet');
-    const w10 = text('week/10/index.html').replace(/\s+/g, ' ');
-    expect(w10).toContain('DET pick · 50.4%');
-    expect(w10).toContain('Vegas: DET 58.3%');
-    expect(w10).toContain('Model rates NE higher than Vegas does (49.6% vs 41.7%)');
-    expect(w10).toContain('NYG pick · 58%'); // other cards stay whole numbers
     for (const f of files) expect(text(f), f).not.toMatch(/\b50%/);
+  });
+
+  it('season tiles show the real numbers', () => {
+    const t = text('week/3/index.html').replace(/\s+/g, ' ');
+    expect(t).toContain('Picks 44–31 59% accuracy Vegas favorite 60%');
+    expect(t).toMatch(/Value calls 28–24 1 push 54% hit rate Vegas expected \d+%/);
+  });
+
+  it('week summary line on graded weeks only', () => {
+    const t = (p: string) => text(p).replace(/\s+/g, ' ');
+    expect(t('week/7/index.html')).toMatch(/Picks \d+–\d+ · Value calls \d+–\d+/);
+    expect(t('week/5/index.html')).toMatch(/Picks \d+–\d+ · Value calls \d+–\d+ \(1 push\)/);
+    expect(t('week/10/index.html')).not.toMatch(/Picks \d+–\d+ ·/);
+    expect(t('week/12/index.html')).not.toMatch(/Picks \d+–\d+ ·/);
+  });
+
+  it('chips: pick and value call, with icon and text', () => {
+    const w7 = html('week/7/index.html');
+    expect(w7).toMatch(/class="chip win[^"]*"[\s\S]*?<svg[\s\S]*?Pick: <strong[^>]*>[A-Z]{2,3}<\/strong>[\s\S]*?\(correct\)/);
+    expect(w7).toMatch(/class="chip loss[^"]*"[\s\S]*?<svg[\s\S]*?\(wrong\)/);
+    expect(text('week/7/index.html').replace(/\s+/g, ' ')).toMatch(/Value call: [A-Z]{2,3}/);
+    const w5 = text('week/5/index.html').replace(/\s+/g, ' ');
+    expect(w5).toMatch(/Pick: WAS · Tie/);
+    expect(w5).toMatch(/Value call: NYG · Push/);
+    expect(html('week/10/index.html')).toMatch(/class="chip open[^"]*"/);
+  });
+
+  it('week 10 NE at DET: one decimal everywhere, details bars and sentence', () => {
+    const w10 = text('week/10/index.html').replace(/\s+/g, ' ');
+    expect(w10).toContain('Pick: DET');
+    expect(w10).toContain('Value call: NE');
+    expect(w10).toContain('Model NE 49.6% DET 50.4%');
+    expect(w10).toContain('Vegas NE 41.7% DET 58.3%');
+    expect(w10).toContain('Model gives NE 49.6%, Vegas 41.7% — the model thinks NE is underrated.');
+    expect(w10).toMatch(/Model WAS \d+% NYG \d+%/); // other cards stay whole numbers
+  });
+
+  it('details element on every card with a pick, collapsed, and nowhere else', () => {
+    let withPick = 0;
+    for (const f of files) {
+      for (const card of html(f).match(/<article[\s\S]*?<\/article>/g) ?? []) {
+        const hasPick = /Pick: <strong\b/.test(card);
+        expect(/<details\b/.test(card), `${f} ${card.slice(0, 120)}`).toBe(hasPick);
+        if (hasPick) {
+          withPick++;
+          expect(card).toMatch(/<details class="details[^"]*"[^>]*>\s*<summary[^>]*>Details<\/summary>/);
+          expect(card).not.toMatch(/<details[^>]*\bopen\b/);
+        }
+      }
+    }
+    expect(withPick).toBeGreaterThan(90);
+  });
+
+  it('primetime badges on the right games', () => {
+    const badges = (p: string) =>
+      [...html(p).matchAll(/aria-label="([A-Z]+ at [A-Z]+)"[\s\S]*?<\/article>/g)]
+        .map((m) => [m[1], m[0].match(/class="badge[^"]*"[^>]*>(\w+)</)?.[1] ?? null])
+        .filter(([, b]) => b);
+    expect(badges('week/3/index.html')).toEqual([['ATL at GB', 'TNF'], ['LA at DEN', 'SNF'], ['PHI at CHI', 'MNF']]);
+    expect(badges('week/10/index.html')).toEqual([['WAS at NYG', 'TNF'], ['PIT at CIN', 'SNF'], ['LAC at BAL', 'MNF']]);
+  });
+
+  it('card grid: one column, two from 768px, three from 1200px; container 1150px', () => {
+    const css = html('week/3/index.html').replace(/\s+/g, '');
+    expect(css).toMatch(/\.games\[[^\]]*\]\{[^}]*grid-template-columns:1fr/);
+    // The minifier may write (min-width:768px) as (width>=768px).
+    expect(css).toMatch(/@media\((?:min-width:|width>=)768px\)\{\.games\[[^\]]*\]\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+    expect(css).toMatch(/@media\((?:min-width:|width>=)1200px\)\{\.games\[[^\]]*\]\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+    expect(css).toMatch(/\.wrap\{max-width:1150px;margin:0auto/);
+    expect(html('week/3/index.html')).toMatch(/<ol class="games[^"]*"/);
   });
 });

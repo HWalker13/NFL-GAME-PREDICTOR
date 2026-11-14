@@ -75,4 +75,12 @@ const label = (w: WeekInfo): string => {
     background: var(--accent);
   }
   .tab.now[aria-current='page']::after { background: var(--on-accent); }
+  .tab { background: var(--surface); }
+  /* Wide screens: the strip spans the container instead of hugging the left edge. */
+  @media (min-width: 960px) {
+    .tabs { overflow: visible; }
+    ol { width: 100%; }
+    li { flex: 1; }
+    .tab { width: 100%; }
+  }
 </style>

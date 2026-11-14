@@ -1,5 +1,6 @@
 ---
 import { dateTimeEt } from '../lib/format.ts';
+import { REPO, RESULTS_URL } from '../lib/links.ts';
 
 interface Props {
   generatedAt: string;
@@ -7,19 +8,18 @@ interface Props {
   commit: string;
 }
 const { generatedAt, asOf, commit } = Astro.props;
-const REPO = 'https://github.com/HWalker13/NFL-GAME-PREDICTOR';
 ---
 <footer class="footer">
   <p><strong>Paper picks for a machine-learning project. Not betting advice.</strong></p>
   <p>Vegas % is the market's implied win chance at the time the pick was logged.</p>
   <p>
     Schedule and scores as of <time datetime={asOf}>{dateTimeEt(asOf)}</time>.
-    Data generated <time datetime={generatedAt}>{dateTimeEt(generatedAt)}</time> from commit
+    Data generated <time datetime={generatedAt}>{dateTimeEt(generatedAt)}</time> from commit{' '}
     <a href={`${REPO}/commit/${commit}`}><code>{commit.slice(0, 7)}</code></a>.
   </p>
   <p class="links">
     <a href={REPO}>GitHub repo</a>
-    <a href="https://holden-anderson.vercel.app/projects/nfl-game-predictor/results/">How the model works</a>
+    <a href={RESULTS_URL}>How the model works</a>
   </p>
 </footer>
 

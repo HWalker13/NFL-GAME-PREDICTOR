@@ -15,12 +15,17 @@ if (!page) throw new Error(`no page data for week ${week}`);
 ---
 <Base
   title={`NFL picks · Week ${week} · 2026`}
-  description={`A machine-learning model's straight-up NFL picks for week ${week} of 2026, next to the Vegas odds.`}
+  description={`A machine-learning model's straight-up NFL picks and value calls for week ${week} of 2026, next to the Vegas odds.`}
 >
   <div class="wrap">
     <Header week={week} record={site.record} />
     <WeekTabs weeks={site.weeks} viewed={week} current={site.current} />
     <main>
+      {page.summary && (
+        <p class="summary">
+          Picks {page.summary.picks.w}–{page.summary.picks.l} · Value calls {page.summary.valueCalls.w}–{page.summary.valueCalls.l}{page.summary.valueCalls.push > 0 && ` (${page.summary.valueCalls.push} ${page.summary.valueCalls.push === 1 ? 'push' : 'pushes'})`}
+        </p>
+      )}
       {page.banner && <p class="banner">{page.banner}</p>}
       <ol class="games">
         {page.cards.map((card) => <li><GameCard card={card} /></li>)}
@@ -39,5 +44,12 @@ if (!page) throw new Error(`no page data for week ${week}`);
     color: var(--text);
     font-size: 0.9375rem;
   }
-  .games { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+  .summary { margin: 6px 0 10px; font-size: 0.9375rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .games { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 768px) {
+    .games { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1200px) {
+    .games { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
 </style>

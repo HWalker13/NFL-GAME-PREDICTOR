@@ -1,65 +1,103 @@
 ---
 import { kickoffEt, pct } from '../lib/format.ts';
-import type { Card, CardStatus, TeamRow } from '../lib/card.ts';
+import { detailsSentence, type Card, type CardStatus, type Call, type Grade, type TeamRow } from '../lib/card.ts';
 
 interface Props {
   card: Card;
 }
 const { card } = Astro.props;
 
-const STATUS: Record<CardStatus, { text: string; icon: 'check' | 'cross' | 'dash' | null }> = {
-  correct: { text: 'Correct', icon: 'check' },
-  wrong: { text: 'Wrong', icon: 'cross' },
-  tie: { text: 'Tie', icon: 'dash' },
-  final: { text: 'Final', icon: null },
-  upcoming: { text: 'Not played yet', icon: null },
-  'score-pending': { text: 'Score pending', icon: null },
+const STATUS: Record<CardStatus, string> = {
+  final: 'Final',
+  upcoming: 'Not played yet',
+  'score-pending': 'Score pending',
 };
-const status = STATUS[card.status];
+/** Screen-reader word for each grade; push and tie also show a visible word. */
+const GRADE: Record<Grade, { sr: string; shown: string | null; icon: 'check' | 'cross' | 'dash' | null }> = {
+  win: { sr: 'correct', shown: null, icon: 'check' },
+  loss: { sr: 'wrong', shown: null, icon: 'cross' },
+  push: { sr: '', shown: 'Push', icon: 'dash' },
+  open: { sr: '', shown: null, icon: null },
+};
 const rows: TeamRow[] = [card.away, card.home];
 const p = (x: number): string => pct(x, card.decimals);
+const chips: { label: string; call: Call }[] = [];
+if (card.pick) chips.push({ label: 'Pick', call: card.pick });
+if (card.valueCall) chips.push({ label: 'Value call', call: card.valueCall });
+// A tied game isn't a push for the straight-up pick; it just reads "Tie".
+const shownWord = (label: string, g: Grade): string | null => (g === 'push' && label === 'Pick' ? 'Tie' : GRADE[g].shown);
+const sentence = detailsSentence(card, p);
+const bars = card.probs
+  ? [
+      { label: 'Model', home: card.probs.modelHome },
+      ...(card.probs.vegasHome === null ? [] : [{ label: 'Vegas', home: card.probs.vegasHome }]),
+    ]
+  : [];
 ---
 <article class="card" aria-label={`${card.away.abbr} at ${card.home.abbr}`}>
   <div class="top">
     <time datetime={card.kickoffUtc}>{kickoffEt(card.kickoffUtc)}</time>
-    <span class:list={['status', card.status]}>
-      {status.icon === 'check' && (
-        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
-      )}
-      {status.icon === 'cross' && (
-        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-      )}
-      {status.icon === 'dash' && (
-        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M4 8h8" /></svg>
-      )}
-      {status.text}
-    </span>
+    {card.primetime && <span class="badge">{card.primetime}</span>}
+    <span class:list={['status', card.status]}>{STATUS[card.status]}</span>
   </div>
 
   <ul class="teams">
     {rows.map((t) => (
-      <li class:list={['team', { picked: t.picked, other: card.pick !== null && !t.picked }]}>
+      <li class:list={['team', { picked: t.picked }]}>
         <span class="abbr">{t.abbr}</span>
-        {t.picked && card.pick && <span class="pick">pick · {p(card.pick.modelProb)}</span>}
+        {t.picked && <span class="sr">(model's pick)</span>}
         {t.score !== null && <span class="score">{t.score}</span>}
       </li>
     ))}
   </ul>
 
-  {card.pick && (
-    <p class="vegas">
-      {card.pick.vegasProb === null ? 'Vegas: no line' : `Vegas: ${card.pick.team} ${p(card.pick.vegasProb)}`}
-    </p>
+  {chips.length > 0 && (
+    <ul class="chips">
+      {chips.map(({ label, call }) => (
+        <li class:list={['chip', call.grade]}>
+          {GRADE[call.grade].icon === 'check' && (
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
+          )}
+          {GRADE[call.grade].icon === 'cross' && (
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+          )}
+          {GRADE[call.grade].icon === 'dash' && (
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M4 8h8" /></svg>
+          )}
+          <span>{label}: <strong>{call.team}</strong></span>
+          {shownWord(label, call.grade) && <span class="word">· {shownWord(label, call.grade)}</span>}
+          {GRADE[call.grade].sr && <span class="sr">({GRADE[call.grade].sr})</span>}
+        </li>
+      ))}
+    </ul>
   )}
-  {card.flag && (
-    <p class="flag">
-      Model rates {card.flag.team} higher than Vegas does ({p(card.flag.modelProb)} vs {p(card.flag.vegasProb)})
-    </p>
+
+  {card.pick && (
+    <details class="details">
+      <summary>Details</summary>
+      <dl class="bars">
+        {bars.map((b) => (
+          <div class="bar-row">
+            <dt>{b.label}</dt>
+            <dd>
+              <span class="n">{card.away.abbr} {p(1 - b.home)}</span>
+              <span class="bar" aria-hidden="true">
+                <span class="away-seg" style={`width: ${((1 - b.home) * 100).toFixed(1)}%`}></span>
+                <span class="home-seg"></span>
+              </span>
+              <span class="n">{card.home.abbr} {p(b.home)}</span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {sentence && <p class="why">{sentence}</p>}
+    </details>
   )}
 </article>
 
 <style>
   .card {
+    height: 100%;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -67,30 +105,103 @@ const p = (x: number): string => pct(x, card.decimals);
   }
   .top {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 8px;
     color: var(--muted);
     font-size: 0.875rem;
   }
-  .status { display: inline-flex; align-items: center; gap: 4px; }
-  .status.correct, .status.wrong, .status.tie { color: var(--text); font-weight: 600; }
-  .status svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .badge {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--red);
+    color: var(--on-red);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+  }
+  .status { margin-left: auto; }
+  .status.final { color: var(--text); font-weight: 600; }
+
   .teams { list-style: none; margin: 8px 0 0; padding: 0; }
   .team {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    padding-block: 3px;
+    padding-block: 2px;
     font-size: 1.0625rem;
   }
-  .abbr { min-width: 3ch; font-weight: 600; }
-  .team.picked .abbr { color: var(--accent); font-weight: 800; }
-  .team.other { color: var(--muted); }
-  .team.other .abbr { font-weight: 400; }
-  .pick { color: var(--accent); font-size: 0.9375rem; font-weight: 600; }
-  .score { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .vegas, .flag { margin: 6px 0 0; font-size: 0.875rem; }
-  .vegas { color: var(--text); }
-  .flag { color: var(--muted); }
+  .abbr { min-width: 3ch; font-weight: 500; }
+  .team.picked .abbr, .team.picked .score { font-weight: 850; }
+  .team.picked::before {
+    content: '';
+    align-self: center;
+    width: 4px;
+    height: 1em;
+    margin-right: -4px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  .score { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 10px 0 0; padding: 0; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--chip);
+    color: var(--text);
+    font-size: 0.8125rem;
+    border: 1px solid transparent;
+  }
+  .chip.win { background: var(--good-bg); color: var(--good); }
+  .chip.loss { background: var(--bad-bg); color: var(--bad); }
+  .chip.open { border-color: var(--line); background: transparent; }
+  .chip strong { font-weight: 800; }
+  .chip svg { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .word { font-weight: 600; }
+
+  .details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+  summary {
+    cursor: pointer;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 700;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+  }
+  .details[open] summary::before { transform: rotate(45deg); }
+
+  .bars { margin: 4px 0 0; display: grid; gap: 6px; }
+  .bar-row { display: grid; grid-template-columns: 3.6rem 1fr; align-items: center; gap: 8px; font-size: 0.8125rem; }
+  dt { color: var(--muted); font-weight: 700; }
+  dd { margin: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+  .n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bar-home); }
+  .away-seg { background: var(--bar-away); border-right: 2px solid var(--surface); }
+  .home-seg { flex: 1; }
+  .why { margin: 8px 0 2px; font-size: 0.875rem; }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 </style>

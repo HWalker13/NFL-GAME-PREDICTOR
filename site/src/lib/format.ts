@@ -28,3 +28,18 @@ export const pct = (p: number, decimals: 0 | 1 = 0): string =>
 
 /** True when a probability would read as a coin flip at whole-number precision. */
 export const showsAsFifty = (p: number): boolean => Math.round(p * 100) === 50;
+
+export type Primetime = 'TNF' | 'SNF' | 'MNF';
+
+/**
+ * Primetime badge from the kickoff in US Eastern time: TNF = Thursday night (7 PM ET or later, so
+ * Thanksgiving afternoon games get none), SNF = Sunday at or after 7 PM ET, MNF = any Monday game.
+ */
+export function primetime(iso: string): Primetime | null {
+  const p = parts(iso, { weekday: 'short', hour: 'numeric', hourCycle: 'h23' });
+  const hour = Number(p['hour']);
+  if (p['weekday'] === 'Mon') return 'MNF';
+  if (p['weekday'] === 'Thu' && hour >= 19) return 'TNF';
+  if (p['weekday'] === 'Sun' && hour >= 19) return 'SNF';
+  return null;
+}

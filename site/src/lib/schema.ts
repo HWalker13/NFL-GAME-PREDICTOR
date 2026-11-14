@@ -2,7 +2,9 @@
   Zod schema for the parts of exports/site_data.json (schema 1.x, field docs in exports/SCHEMA.md)
   that this site reads. Unknown keys are dropped, so the export can grow without breaking the
   build; a field the site uses that disappears or changes type fails the build instead of
-  rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0.
+  rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0. The official
+  record (`live_2026.official_bets`) and `games[].bet_side` are read only to cross-check the value
+  calls; they're never rendered.
 */
 import { z } from 'zod';
 
@@ -43,7 +45,11 @@ export const gameSchema = z.object({
   home_score: score,
   pick_correct: z.boolean().nullable(),
   bet: z.boolean(),
+  bet_side: side.nullable(),
 });
+
+/** The official paper record's outcome counts; the site's graded value calls must equal these. */
+const officialRecord = z.object({ wins: count, losses: count, voids: count, pending: count });
 
 const weekSchema = z.object({
   week,
@@ -65,6 +71,7 @@ export const siteDataSchema = z
         champion: z.object({ accuracy: rate }),
         vegas_favorite: z.object({ accuracy: rate }),
       }),
+      official_bets: officialRecord,
       weeks: z.array(weekSchema),
     }),
     schedule_2026: z.array(scheduleGameSchema).min(1),
@@ -84,6 +91,9 @@ export const siteDataSchema = z
       const s = byId.get(g.game_id);
       if (!s || s.week !== g.week || s.away !== g.away || s.home !== g.home) {
         ctx.addIssue({ code: 'custom', path: ['games'], message: `live game ${g.game_id} does not match schedule_2026` });
+      }
+      if (g.bet !== (g.bet_side !== null)) {
+        ctx.addIssue({ code: 'custom', path: ['games'], message: `live game ${g.game_id} has bet/bet_side out of step` });
       }
     }
     for (const s of d.schedule_2026) {
