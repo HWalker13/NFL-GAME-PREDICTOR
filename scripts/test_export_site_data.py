@@ -381,6 +381,96 @@ class Schedule2026(unittest.TestCase):
             self.assertFalse(out.exists())
 
 
+class Amendment6(unittest.TestCase):
+    """Value tiers, wins over expected and toss-ups (display only): consistent with the official
+    record, with the per-game flags, and with the scorecard."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = _load()
+        cls.L = cls.d["live_2026"]
+        cls.vw = cls.L["value_woe"]
+        cls.live = [g for g in cls.d["games"] if g["evaluation"] == "live_2026"]
+
+    def test_constants_from_rule(self):
+        self.assertEqual(self.L["value_tier_two_star_edge"], C.VALUE_TIER_2_EDGE)
+        self.assertEqual(self.L["value_tier_two_star_edge"], SC.EDGE_BUCKETS[-1][0])
+        self.assertEqual(self.L["toss_up_threshold"], C.TOSS_UP_MAX_FAV)
+        self.assertEqual(self.d["schema_version"], "1.3.0")
+
+    def test_tier_counts_sum_to_official(self):
+        one, two, a = self.vw["one_star"], self.vw["two_star"], self.vw["all"]
+        for f in ("calls_logged", "calls_graded", "wins", "losses", "pushes", "n", "won"):
+            self.assertEqual(one[f] + two[f], a[f], f)
+        o = self.L["official_bets"]
+        self.assertEqual((a["wins"], a["losses"], a["pushes"], a["calls_graded"]),
+                         (o["wins"], o["losses"], o["voids"], o["bets"]))
+        self.assertEqual(a["calls_logged"], sum(g["bet"] for g in self.live))
+        self.assertEqual(a["n"], a["wins"] + a["losses"])
+
+    def test_tier_woe_sums_to_overall(self):
+        one, two, a = self.vw["one_star"], self.vw["two_star"], self.vw["all"]
+        for f in ("vegas_expected", "model_expected", "woe"):
+            self.assertAlmostEqual(one[f] + two[f], a[f], delta=2e-4, msg=f)   # three 4-dp roundings
+        for t in (one, two, a):
+            self.assertAlmostEqual(t["woe"], t["won"] - t["vegas_expected"], delta=2e-4)
+            if t["n"]:
+                self.assertAlmostEqual(t["woe_per_call"], t["woe"] / t["n"], delta=1e-4)
+                self.assertAlmostEqual(t["model_expected_per_call"], t["model_expected"] / t["n"], delta=1e-4)
+
+    def test_per_game_flags(self):
+        tiers = {1: 0, 2: 0}
+        for g in self.live:
+            with self.subTest(game=g["game_id"]):
+                self.assertEqual(g["value_tier"] is not None, g["bet"])
+                if g["bet"]:
+                    tiers[g["value_tier"]] += 1
+                p = g["model_home_prob"]   # 4 dp: only check games clear of the cutoff
+                if abs(max(p, 1 - p) - C.TOSS_UP_MAX_FAV) > 1e-4:
+                    self.assertEqual(g["toss_up"], max(p, 1 - p) <= C.TOSS_UP_MAX_FAV)
+        self.assertEqual((tiers[1], tiers[2]), (self.vw["one_star"]["calls_logged"], self.vw["two_star"]["calls_logged"]))
+
+    def test_per_game_flags_match_full_precision_sources(self):
+        preds = E.load_live_predictions()
+        champ = preds[preds["model"] == "champion"].set_index("game_id")
+        for g in self.live:
+            r = champ.loc[g["game_id"]]
+            self.assertEqual(g["toss_up"], C.is_toss_up(r["p_home"]), g["game_id"])
+            want = C.value_tier(C.side_edge(r["paper_bet"], r["edge_home"], r["edge_away"])) \
+                if r["paper_bet"] in ("home", "away") else None
+            self.assertEqual(g["value_tier"], want, g["game_id"])
+
+    def test_confidence_split_adds_up(self):
+        b = self.L["prediction_quality_by_confidence"]
+        champ = self.L["prediction_quality"]["champion"]["accuracy"]
+        self.assertEqual((b["all"]["accuracy"]["k"], b["all"]["accuracy"]["n"]), (champ["k"], champ["n"]))
+        for f in ("k", "n"):
+            self.assertEqual(b["confident"]["accuracy"][f] + b["toss_up"]["accuracy"][f], champ[f])
+        self.assertEqual(b["confident"]["games_logged"] + b["toss_up"]["games_logged"], self.L["games_logged"])
+        self.assertEqual(b["toss_up"]["games_logged"], sum(g["toss_up"] for g in self.live))
+        for key in ("confident", "toss_up", "all"):   # graded per-game picks agree
+            games = [g for g in self.live if g["pick_correct"] is not None
+                     and (key == "all" or g["toss_up"] == (key == "toss_up"))]
+            self.assertEqual((sum(g["pick_correct"] for g in games), len(games)),
+                             (b[key]["accuracy"]["k"], b[key]["accuracy"]["n"]), key)
+
+    def test_scorecard_section_verbatim(self):
+        graded = SC.load_graded(E.LIVE_ROOT, E.LIVE_SEASON)
+        self.assertIn(SC.amendment6_section(graded), E.SCORECARD_PATH.read_text())
+
+    def test_refuses_on_tier_mismatch(self):
+        orig = E.amendment6_value_woe
+        def bad(graded, champ_pred):
+            out = orig(graded, champ_pred)
+            out["two_star"] = dict(out["two_star"], woe=out["two_star"]["woe"] + 0.5)
+            return out
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / "out.json"
+            with mock.patch.object(E, "amendment6_value_woe", bad), mock.patch("sys.stderr"):
+                self.assertEqual(E.main(["--out", str(out)]), 2)
+            self.assertFalse(out.exists())
+
+
 class DeterminismAndGuards(unittest.TestCase):
 
     def test_byte_identical_rebuild(self):
@@ -421,7 +511,10 @@ class DeterminismAndGuards(unittest.TestCase):
             | set(d["negative_control"]["conditions"][0]["check1"]) \
             | set(d["negative_control"]["conditions"][0]["check2"]) \
             | set(d["negative_control"]["conditions"][0]["check2"]["current_67"]) \
-            | set(d["schedule_2026"][0])
+            | set(d["schedule_2026"][0]) \
+            | set(d["live_2026"]["value_woe"]) | set(d["live_2026"]["value_woe"]["all"]) \
+            | set(d["live_2026"]["prediction_quality_by_confidence"]) \
+            | set(d["live_2026"]["prediction_quality_by_confidence"]["all"])
         missing = sorted(k for k in keys if f"`{k}`" not in schema)
         self.assertEqual(missing, [])
 

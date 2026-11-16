@@ -18,6 +18,7 @@ import stat
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -460,6 +461,7 @@ def _graded(weeks, ll_champ, ll_chall, clv=0.0, pending_week=None):
                 rows.append(dict(week=w, game_id=gid, model=model, result="home", correct=1.0,
                                  log_loss=ll + rng.normal(0, 0.01), brier=0.2, home_correct=1.0,
                                  vegas_correct=1.0, vegas_log_loss=0.6, vegas_brier=0.2,
+                                 p_home=0.60, implied_p_home=0.55,
                                  paper_bet="home", edge_home=0.05, edge_away=-0.05,
                                  bet_outcome="win", units=0.9,
                                  bet_status="official" if model == "champion" else "hypothetical",
@@ -624,6 +626,106 @@ class TestScorecard(unittest.TestCase):
         self.assertIn("## Cumulative -- prediction quality", md)
         self.assertIn("PROVISIONAL", md)
         self.assertIn("No graded weeks yet", S.build_markdown(pd.DataFrame(), 2026, 0, "t", False, {}, _sched()))
+
+
+# --------------------------------------------------------------------------- #
+# Amendment 6: value tiers, toss-ups, wins over expected (display only)
+# --------------------------------------------------------------------------- #
+class TestAmendment6(unittest.TestCase):
+    def test_value_tier_boundaries(self):
+        self.assertIsNone(C.value_tier(0.0399))
+        self.assertIsNone(C.value_tier(np.nan))
+        self.assertEqual(C.value_tier(0.04), 1)
+        self.assertEqual(C.value_tier(0.57 - 0.53), 1)            # 0.03999999999999992 in floats
+        self.assertEqual(C.value_tier(0.0799), 1)                 # just below 0.08
+        self.assertEqual(C.value_tier(0.07999999), 1)
+        self.assertEqual(C.value_tier(0.08), 2)                   # exactly 0.08 is two-star
+        self.assertEqual(C.value_tier(0.58 - 0.50), 2)            # 0.07999999999999996 in floats
+        self.assertEqual(C.value_tier(0.25), 2)
+
+    def test_value_tier_agrees_with_section3_buckets(self):
+        for e in np.round(np.arange(0.0, 0.2, 0.00005), 6).tolist() + [0.58 - 0.50, 0.36 - 0.30, 0.57 - 0.53]:
+            self.assertEqual(C.value_tier(e), S.TIER_OF_BUCKET.get(S.edge_bucket(e)), e)
+        self.assertEqual(C.VALUE_TIER_2_EDGE, S.EDGE_BUCKETS[-1][0])
+
+    def test_toss_up_boundaries(self):
+        self.assertTrue(C.is_toss_up(0.55))                       # exactly 0.55: toss-up (inclusive)
+        self.assertTrue(C.is_toss_up(0.45))                       # same game from the other side
+        self.assertTrue(C.is_toss_up(0.30 + 0.25))                # 0.55 with float noise
+        self.assertTrue(C.is_toss_up(0.5))
+        self.assertTrue(C.is_toss_up(0.5499))                     # just below
+        self.assertFalse(C.is_toss_up(0.5501))                    # just above
+        self.assertFalse(C.is_toss_up(0.4499))
+        self.assertFalse(C.is_toss_up(0.9))
+
+    def test_woe_summary(self):
+        s = C.woe_summary([1, 0, 1], [0.6, 0.26, 0.45], [0.10, 0.10, 0.04])
+        self.assertEqual((s["n"], s["won"]), (3, 2))
+        self.assertAlmostEqual(s["vegas_expected"], 1.31)
+        self.assertAlmostEqual(s["woe"], 0.69)
+        self.assertAlmostEqual(s["woe_per_call"], 0.23)
+        self.assertAlmostEqual(s["model_expected"], 0.24)
+        self.assertAlmostEqual(s["model_expected_per_call"], 0.08)
+        e = C.woe_summary([], [], [])
+        self.assertEqual((e["n"], e["won"], e["woe"]), (0, 0, 0.0))
+        self.assertTrue(np.isnan(e["woe_per_call"]))
+
+    def test_side_helpers(self):
+        self.assertAlmostEqual(C.side_implied("home", 0.7), 0.7)
+        self.assertAlmostEqual(C.side_implied("away", 0.7), 0.3)
+        self.assertEqual(C.side_edge("away", -0.09, 0.09), 0.09)
+
+    def _calls(self):
+        # four official champion calls: home 0.05 win, away 0.09 loss, home 0.08 void, home 0.06 win;
+        # plus a challenger (hypothetical) call and a no-bet row that must be ignored.
+        rows = [("home", 0.05, 0.50, "win"), ("away", -0.09, 0.40, "loss"), ("home", 0.08, 0.60, "void"),
+                ("home", 0.06, 0.30, "win")]
+        df = pd.DataFrame([dict(model="champion", game_id=f"g{i}", paper_bet=s, edge_home=e, edge_away=-e,
+                                implied_p_home=imp, bet_outcome=o, bet_status="official")
+                           for i, (s, e, imp, o) in enumerate(rows)])
+        extra = pd.DataFrame([dict(model="challenger", game_id="g0", paper_bet="home", edge_home=0.2,
+                                   edge_away=-0.2, implied_p_home=0.5, bet_outcome="win", bet_status="hypothetical"),
+                              dict(model="champion", game_id="g9", paper_bet="none", edge_home=0.01,
+                                   edge_away=-0.01, implied_p_home=0.5, bet_outcome="none", bet_status="official")])
+        return pd.concat([df, extra], ignore_index=True)
+
+    def test_value_woe_rows_per_tier_sum_to_all(self):
+        r = S.value_woe_rows(self._calls())
+        self.assertEqual((r["all"]["calls"], r[1]["calls"], r[2]["calls"]), (4, 2, 2))
+        self.assertEqual((r[1]["wins"], r[1]["losses"], r[2]["losses"], r[2]["pushes"]), (2, 0, 1, 1))
+        self.assertEqual((r["all"]["n"], r[1]["n"], r[2]["n"]), (3, 2, 1))       # the push is excluded
+        # vegas expected: home 0.50, home 0.30 (tier 1); away side of 0.40 = 0.60 (tier 2)
+        self.assertAlmostEqual(r[1]["vegas_expected"], 0.80)
+        self.assertAlmostEqual(r[2]["vegas_expected"], 0.60)
+        self.assertAlmostEqual(r["all"]["woe"], 2 - 1.40)
+        self.assertAlmostEqual(r[1]["woe"] + r[2]["woe"], r["all"]["woe"])
+        self.assertAlmostEqual(r["all"]["model_expected"], 0.05 + 0.09 + 0.06)
+        t = S.value_woe_table(self._calls())
+        self.assertIn("| ★★ edge [0.08+) | 2 | 0-1 (1, 0) | 1 | 0 | 0.600 | 0.090 | -0.600 | -0.6000 | +0.0900 |", t)
+
+    def test_tier_disagreeing_with_bucket_refuses(self):
+        df = self._calls()
+        with unittest.mock.patch.object(C, "VALUE_TIER_2_EDGE", 0.06):   # the 0.06 call would turn two-star
+            with self.assertRaises(ValueError):
+                S.official_value_calls(df)
+
+    def test_confidence_rows(self):
+        df = pd.DataFrame([dict(model="champion", p_home=p, result=r, correct=c) for p, r, c in (
+            (0.55, "home", 1.0), (0.45, "away", 0.0), (0.70, "home", 1.0), (0.20, "away", 1.0),
+            (0.52, "tie", np.nan), (0.80, "pending", np.nan))]
+            + [dict(model="challenger", p_home=0.5, result="home", correct=0.0)])
+        r = S.confidence_rows(df)
+        self.assertEqual(r["toss_up"], {"logged": 3, "acc": (1, 2)})      # tie logged, not in accuracy
+        self.assertEqual(r["confident"], {"logged": 3, "acc": (2, 2)})    # pending logged, not in accuracy
+        self.assertEqual(r["all"], {"logged": 6, "acc": (3, 4)})
+        self.assertIn("| Toss-up (favorite <= 0.55) | 3 | 1/2 = 0.500 [", S.confidence_table(df))
+
+    def test_section_in_markdown(self):
+        df = _graded(range(4, 6), 0.6, 0.62)
+        md = S.build_markdown(df, 2026, 2, "2026-10-13T00:00:00Z", False,
+                              {w: set(g["game_id"]) for w, g in df.groupby("week")}, _sched())
+        self.assertIn("## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)", md)
+        self.assertIn(S.amendment6_section(df), md)
 
 
 # --------------------------------------------------------------------------- #

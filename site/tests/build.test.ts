@@ -7,6 +7,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { loadSiteData } from '../src/lib/data.ts';
 
 let out = '';
 const files: string[] = [];
@@ -64,8 +65,11 @@ describe('build output', () => {
       expect(t, f).toMatch(/NFL picks/);
       expect(t, f).toMatch(/Week \d+ · 2026/);
       const ts = t.replace(/\s+/g, ' ');
-      expect(ts, f).toMatch(/Picks \d+–\d+ \d+% accuracy Vegas favorite \d+%/);
-      expect(ts, f).toMatch(/Value calls \d+–\d+(?: \d+ push(?:es)?)? \d+% hit rate Vegas expected \d+%/);
+      expect(ts, f).toMatch(/Picks \d+–\d+ \d+% accuracy Vegas favorite \d+% Confident picks \d+% · Toss-ups \d+%/);
+      expect(ts, f).toMatch(
+        /Value calls (?:\+\d+\.\d ahead of Vegas|\d+\.\d behind Vegas|Even with Vegas) Won \d+ · Vegas expected \d+\.\d ★ one-star value calls: \d+ calls? · .+ ★★ two-star value calls: \d+ calls? · .+ Record \d+–\d+/,
+      );
+      expect(ts, f).not.toMatch(/hit rate/i);
       expect(ts, f).toContain('Small sample — read this as a trend, not proof.');
       expect(html(f), f).toMatch(/<a href="https:\/\/holden-anderson\.vercel\.app\/projects\/nfl-game-predictor\/results\/"[^>]*>Small sample/);
       expect(t, f).toContain('Paper picks for a machine-learning project. Not betting advice.');
@@ -101,8 +105,13 @@ describe('build output', () => {
 
   it('season tiles show the real numbers', () => {
     const t = text('week/3/index.html').replace(/\s+/g, ' ');
-    expect(t).toContain('Picks 44–31 59% accuracy Vegas favorite 60%');
-    expect(t).toMatch(/Value calls 28–24 1 push 54% hit rate Vegas expected \d+%/);
+    expect(t).toContain('Picks 44–31 59% accuracy Vegas favorite 60% Confident picks 63% · Toss-ups 44%');
+    expect(t).toContain(
+      'Value calls +3.6 ahead of Vegas Won 28 · Vegas expected 24.4 ' +
+        '★ one-star value calls: 22 calls · +1.2 ahead (+0.6 per 10 calls) ' +
+        '★★ two-star value calls: 30 calls · +2.4 ahead (+0.8 per 10 calls) ' +
+        'Record 28–24 (1 push)',
+    );
   });
 
   it('week summary line on graded weeks only', () => {
@@ -117,17 +126,17 @@ describe('build output', () => {
     const w7 = html('week/7/index.html');
     expect(w7).toMatch(/class="chip win[^"]*"[\s\S]*?<svg[\s\S]*?Pick: <strong[^>]*>[A-Z]{2,3}<\/strong>[\s\S]*?\(correct\)/);
     expect(w7).toMatch(/class="chip loss[^"]*"[\s\S]*?<svg[\s\S]*?\(wrong\)/);
-    expect(text('week/7/index.html').replace(/\s+/g, ' ')).toMatch(/Value call: [A-Z]{2,3}/);
+    expect(text('week/7/index.html').replace(/\s+/g, ' ')).toMatch(/Value call ★{1,2} (?:one|two)-star value call : [A-Z]{2,3}/);
     const w5 = text('week/5/index.html').replace(/\s+/g, ' ');
     expect(w5).toMatch(/Pick: WAS · Tie/);
-    expect(w5).toMatch(/Value call: NYG · Push/);
+    expect(w5).toMatch(/Value call ★{1,2} (?:one|two)-star value call : NYG · Push/);
     expect(html('week/10/index.html')).toMatch(/class="chip open[^"]*"/);
   });
 
   it('week 10 NE at DET: one decimal everywhere, details bars and sentence', () => {
     const w10 = text('week/10/index.html').replace(/\s+/g, ' ');
     expect(w10).toContain('Pick: DET');
-    expect(w10).toContain('Value call: NE');
+    expect(w10).toMatch(/Value call ★{1,2} (?:one|two)-star value call : NE/);
     expect(w10).toContain('Model NE 49.6% DET 50.4%');
     expect(w10).toContain('Vegas NE 41.7% DET 58.3%');
     expect(w10).toContain('Model gives NE 49.6%, Vegas 41.7% — the model thinks NE is underrated.');
@@ -157,6 +166,43 @@ describe('build output', () => {
         .filter(([, b]) => b);
     expect(badges('week/3/index.html')).toEqual([['ATL at GB', 'TNF'], ['LA at DEN', 'SNF'], ['PHI at CHI', 'MNF']]);
     expect(badges('week/10/index.html')).toEqual([['WAS at NYG', 'TNF'], ['PIT at CIN', 'SNF'], ['LAC at BAL', 'MNF']]);
+  });
+
+  it('tier chip: visible stars hidden from screen readers, which get the words instead', () => {
+    const w7 = html('week/7/index.html');
+    expect(w7).toMatch(/<span aria-hidden="true"[^>]*>Value call <span class="stars[^"]*"[^>]*>★{1,2}<\/span><\/span><span class="sr[^"]*"[^>]*>(?:one|two)-star value call<\/span>: <strong/);
+    // every value chip carries a tier; no pick chip does
+    for (const f of files) {
+      for (const card of html(f).match(/<article[\s\S]*?<\/article>/g) ?? []) {
+        expect(/Value call: /.test(card), `${f} untiered value chip`).toBe(false);
+        expect(/Pick <span class="stars/.test(card), f).toBe(false);
+      }
+    }
+  });
+
+  it('TOSS UP pill on exactly the toss-up games, in the top row, pick chip kept', () => {
+    const d = loadSiteData();
+    const want = (w: number) =>
+      d.games.filter((g) => g.evaluation === 'live_2026' && g.week === w && g.toss_up).map((g) => `${g.away} at ${g.home}`).sort();
+    const pills = (p: string) =>
+      [...html(p).matchAll(/<article[^>]*aria-label="([A-Z]+ at [A-Z]+)"[\s\S]*?<\/article>/g)]
+        .filter((m) => /class="toss[^"]*"/.test(m[0]))
+        .map((m) => {
+          const top = m[0].match(/<div class="top[^"]*"[^>]*>([\s\S]*?)<\/div>/)![1]!;
+          expect(top, m[1]).toMatch(/class="toss[^"]*"[^>]*>Toss up<span class="sr[^"]*"[^>]*>: the model's two win chances are within 10 points<\/span>/);
+          expect(m[0], m[1]).toMatch(/Pick: <strong/);
+          return m[1]!;
+        })
+        .sort();
+    for (const w of [3, 5, 7, 10]) expect(pills(`week/${w}/index.html`), `week ${w}`).toEqual(want(w));
+    expect(want(10).length).toBeGreaterThan(0);
+    expect(pills('week/12/index.html')).toEqual([]); // no picks yet, no pills
+    // the pill can sit next to a primetime badge: week 3 PHI at CHI is MNF and a toss-up
+    const phiChi = html('week/3/index.html').match(/<article[^>]*aria-label="PHI at CHI"[\s\S]*?<\/article>/)![0];
+    expect(phiChi).toMatch(/class="badge[^"]*"[^>]*>MNF<\/span>\s*<span class="toss/);
+    const css = html('week/3/index.html').replace(/\s+/g, '');
+    expect(css).toMatch(/\.toss\[[^\]]*\]\{[^}]*background:var\(--amber-bg\);color:var\(--on-amber\)/);
+    expect(css).toMatch(/text-transform:uppercase/);
   });
 
   it('card grid: one column, two from 768px, three from 1200px; container 1150px', () => {

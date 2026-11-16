@@ -1,4 +1,4 @@
-# `site_data.json` schema (v1.2.0)
+# `site_data.json` schema (v1.3.0)
 
 Written by `python -m scripts.export_site_data` and tested by `python -m scripts.test_export_site_data`.
 This is an export layer only. Every number is recomputed from per-game data with the project's own
@@ -9,7 +9,7 @@ McNemar). If any of them disagree, the exporter writes nothing and exits 2.
 The `negative_control` block is the exception: it is copied, not recomputed, from
 `audit/out/negative_control.json`, and gated instead (see [`negative_control`](#negative_control)).
 
-**Changelog.** 1.2.0: added the top-level `schedule_2026` block and `live_2026.edge_threshold`
+**Changelog.** 1.3.0: added the Amendment 6 display-only fields: `live_2026.value_tier_two_star_edge`, `live_2026.toss_up_threshold`, `live_2026.value_woe`, `live_2026.prediction_quality_by_confidence`, `live_2026.amendment_6_note`, and per-game `value_tier` / `toss_up` on live games (additive; no existing field changed). 1.2.0: added the top-level `schedule_2026` block and `live_2026.edge_threshold`
 (additive; no existing field changed). 1.1.0: added the top-level `negative_control` block (additive; no existing field changed).
 1.0.0: first release.
 
@@ -31,7 +31,7 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | string | Semver of this schema. Currently `"1.2.0"`. |
+| `schema_version` | string | Semver of this schema. Currently `"1.3.0"`. |
 | `generated_at` | string | UTC time the export content last changed. |
 | `source_commit` | object | Git state at export time: `hash` (full HEAD hash), `dirty` (true if anything outside `exports/` was uncommitted or untracked), `dirty_paths` (those paths). A `dirty: true` export was built from code or data not in `hash`. |
 | `definitions` | object | Plain-English one-liners for non-technical readers. Keys: `accuracy`, `log_loss`, `brier`, `home_baseline`, `vegas_favorite`, `vegas_implied`, `units`, `roi`, `clv`, `bet_rule`, `ci95`, `mcnemar_p`, `retroactive`, `pre_registered`, `prediction_committed_at`. |
@@ -89,6 +89,11 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 | `as_of_source` | string | That snapshot's filename. |
 | `first_official_week` | int | 3 (Amendment 1). Weeks 1-2 came before shadow mode began and are not part of the record. |
 | `edge_threshold` | float | The bet rule's threshold (`scripts/live/common.py` `EDGE_THRESHOLD`, 0.04): a side qualifies when model P(win) minus vig-free market P(win) is at least this. Compare at full precision; the 4 dp probabilities in `games` can round a borderline edge either way, so `bet` is authoritative for live games. |
+| `value_tier_two_star_edge` | float | 0.08 (`scripts/live/common.py` `VALUE_TIER_2_EDGE`, Amendment 6): a value call with edge >= this is two-star (★★), otherwise one-star (★). Equal to the prereg Section 3 `[0.08+)` bucket boundary. |
+| `toss_up_threshold` | float | 0.55 (`TOSS_UP_MAX_FAV`, Amendment 6): a game is a toss-up when the champion's favorite has probability <= this (inclusive), at full precision. |
+| `value_woe` | object | Wins over expected for the official value calls (Amendment 6, descriptive only). Keys `all`, `one_star`, `two_star`; see [`value_woe`](#value_woe). Computed with the scorecard's own `value_woe_rows` and checked against its Amendment 6 table. |
+| `prediction_quality_by_confidence` | object | Champion pick accuracy split by the toss-up flag. Keys `confident`, `toss_up`, `all`, each `{ "games_logged": int, "accuracy": rate }`. `games_logged` counts the prediction files (pending included); `accuracy` follows the usual convention (ties and pending excluded). `confident` + `toss_up` = `all`, and `all` equals `prediction_quality.champion.accuracy`. |
+| `amendment_6_note` | string | Caveat to show with the tiers, WOE and toss-ups: descriptive only; the verdict rests on CLV. |
 | `games_logged` | int | Champion predictions logged, including pending games. |
 | `games_graded` / `games_decided` / `ties` / `games_pending` | int | Graded = decided + ties. Pending = logged but not yet graded or without a final score. |
 | `line_timing` | string | Live lines are the snapshot saved when the prediction was logged, not the close. |
@@ -99,6 +104,26 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 | `weeks` | array | One entry for **every** scheduled week from `first_official_week` through the latest week that has kicked off or been predicted. See [`weeks[]`](#weeks). |
 | `checkpoint` | object | Midseason checkpoint: `window_weeks`, `evaluable`, `planned_games`, `paired_games`, `champion_mean_log_loss`, `challenger_mean_log_loss`, `mean_diff_challenger_minus_champion`, `p_one_sided`, `decision`, `rule`, `week_status` (the scorecard's per-week status text), and `governing_amendment` (`id`, `date`, `source`, `summary`, `disclosure`). |
 | `provenance_note` | string | Caveat on `prediction_committed_at`. |
+
+### `value_woe`
+
+One object per key (`all`, `one_star`, `two_star`). The two tiers always add up to `all`, and `all`'s
+`wins` / `losses` / `pushes` / `calls_graded` equal `official_bets` `wins` / `losses` / `voids` / `bets`.
+Sums are over **graded calls with pushes excluded** (`n` of them). Floats are 4 dp, so a per-tier sum can
+differ from `all` by up to 0.0001 after rounding.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `calls_logged` | int | Official value calls in the prediction files, pending ones included. |
+| `calls_graded` | int | Official value calls in the graded files (wins + losses + pushes + pending). |
+| `wins` / `losses` / `pushes` | int | Graded outcomes. A push is a tied game. |
+| `n` | int | wins + losses: the calls the sums below are over. |
+| `won` | int | Calls whose side won (= `wins`). |
+| `vegas_expected` | float | Sum of the vig-free implied probability of each call's side: the wins the market expected. |
+| `model_expected` | float | Sum of the calls' edges (model minus market probability for the side): the wins over expected the model's own probabilities predicted. Not shown on the site. |
+| `woe` | float | `won` − `vegas_expected`. Positive = more wins than the market expected. |
+| `woe_per_call` | float \| null | `woe` / `n`. Null when `n` is 0. |
+| `model_expected_per_call` | float \| null | `model_expected` / `n`. Null when `n` is 0. |
 
 ### `weeks[]`
 
@@ -187,6 +212,8 @@ exporter writes nothing and exits 2 if any `live_2026` game is missing here or d
 | `pick_correct` | bool \| null | Whether the straight-up pick was right. **Not a bet result.** Null for ties and pending games. |
 | `bet_units` | float \| null | Units won or lost on this game's bet (0 for a void tie). Null when there is no bet or the bet is pending. Never non-null unless `bet` is true. |
 | `predicted_at_utc` | string | Live only: the run time recorded in the prediction CSV (set by the owner's machine). |
+| `value_tier` | int \| null | Live only: 1 (★, edge in [0.04, 0.08)) or 2 (★★, edge >= 0.08) for an official value call, decided at full precision with the bet rule's 10-decimal rounding; null when `bet` is false. Descriptive only (Amendment 6). |
+| `toss_up` | bool | Live only: true when the champion's favorite has probability <= `live_2026.toss_up_threshold`, at full precision. The pick is still made and graded. |
 | `prediction_commit` | string | Live only: full hash of the commit that added the week's prediction file. |
 | `prediction_committed_at` | string | Live only: that commit's **local author timestamp** (UTC). The owner's computer sets it, so it is not proof of push time. |
 | `prediction_committed_at_kind` | string | Live only: says the above in words, so a per-game display carries the caveat. |

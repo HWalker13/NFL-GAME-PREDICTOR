@@ -1,6 +1,6 @@
 ---
 import { kickoffEt, pct } from '../lib/format.ts';
-import { detailsSentence, type Card, type CardStatus, type Call, type Grade, type TeamRow } from '../lib/card.ts';
+import { detailsSentence, tierLabel, type Card, type CardStatus, type Call, type Grade, type TeamRow, type Tier } from '../lib/card.ts';
 
 interface Props {
   card: Card;
@@ -21,9 +21,10 @@ const GRADE: Record<Grade, { sr: string; shown: string | null; icon: 'check' | '
 };
 const rows: TeamRow[] = [card.away, card.home];
 const p = (x: number): string => pct(x, card.decimals);
-const chips: { label: string; call: Call }[] = [];
-if (card.pick) chips.push({ label: 'Pick', call: card.pick });
-if (card.valueCall) chips.push({ label: 'Value call', call: card.valueCall });
+const chips: { label: string; call: Call; tier: Tier | null }[] = [];
+if (card.pick) chips.push({ label: 'Pick', call: card.pick, tier: null });
+if (card.valueCall) chips.push({ label: 'Value call', call: card.valueCall, tier: card.valueCall.tier });
+const STARS: Record<Tier, string> = { 1: '★', 2: '★★' };
 // A tied game isn't a push for the straight-up pick; it just reads "Tie".
 const shownWord = (label: string, g: Grade): string | null => (g === 'push' && label === 'Pick' ? 'Tie' : GRADE[g].shown);
 const sentence = detailsSentence(card, p);
@@ -38,6 +39,9 @@ const bars = card.probs
   <div class="top">
     <time datetime={card.kickoffUtc}>{kickoffEt(card.kickoffUtc)}</time>
     {card.primetime && <span class="badge">{card.primetime}</span>}
+    {card.tossUp && (
+      <span class="toss">Toss up<span class="sr">: the model's two win chances are within 10 points</span></span>
+    )}
     <span class:list={['status', card.status]}>{STATUS[card.status]}</span>
   </div>
 
@@ -53,7 +57,7 @@ const bars = card.probs
 
   {chips.length > 0 && (
     <ul class="chips">
-      {chips.map(({ label, call }) => (
+      {chips.map(({ label, call, tier }) => (
         <li class:list={['chip', call.grade]}>
           {GRADE[call.grade].icon === 'check' && (
             <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
@@ -64,7 +68,11 @@ const bars = card.probs
           {GRADE[call.grade].icon === 'dash' && (
             <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M4 8h8" /></svg>
           )}
-          <span>{label}: <strong>{call.team}</strong></span>
+          {tier ? (
+            <span><span aria-hidden="true">{label} <span class="stars">{STARS[tier]}</span></span><span class="sr">{tierLabel(tier)}</span>: <strong>{call.team}</strong></span>
+          ) : (
+            <span>{label}: <strong>{call.team}</strong></span>
+          )}
           {shownWord(label, call.grade) && <span class="word">· {shownWord(label, call.grade)}</span>}
           {GRADE[call.grade].sr && <span class="sr">({GRADE[call.grade].sr})</span>}
         </li>
@@ -105,8 +113,9 @@ const bars = card.probs
   }
   .top {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 4px 8px;
     color: var(--muted);
     font-size: 0.875rem;
   }
@@ -118,6 +127,17 @@ const bars = card.probs
     font-size: 0.6875rem;
     font-weight: 800;
     letter-spacing: 0.06em;
+  }
+  .toss {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--amber-bg);
+    color: var(--on-amber);
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
   .status { margin-left: auto; }
   .status.final { color: var(--text); font-weight: 600; }
@@ -161,6 +181,7 @@ const bars = card.probs
   .chip strong { font-weight: 800; }
   .chip svg { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   .word { font-weight: 600; }
+  .stars { letter-spacing: 0.04em; }
 
   .details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
   summary {

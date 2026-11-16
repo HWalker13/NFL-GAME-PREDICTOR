@@ -27,18 +27,27 @@ const PAIRS: [string, string][] = [
   ['on-accent', 'accent'],
   // header band
   ['on-brand', 'brand'], ['on-brand-muted', 'brand'],
-  // TNF/SNF/MNF pills
-  ['on-red', 'red'],
+  // TNF/SNF/MNF pills, and the amber TOSS UP pill
+  ['on-red', 'red'], ['on-amber', 'amber-bg'],
+  // value-tier stars in the header tile
+  ['star', 'surface'],
   // chips: neutral, ✓, ✗, and the open chip on the card surface
   ['text', 'chip'], ['good', 'good-bg'], ['bad', 'bad-bg'],
   // details summary and tabs on the card surface
   ['accent', 'note'],
 ];
 
-/** Non-text graphics (WCAG 1.4.11): the details bars against the card and each other. */
+/** Non-text graphics (WCAG 1.4.11): the details bars, and the toss-up pill's fill, against the card. */
 const GRAPHICS: [string, string][] = [
   ['bar-away', 'surface'], ['bar-home', 'surface'],
 ];
+
+/** The toss-up pill must not be mistaken for a ✓/✗ grade: its fill differs from both grade fills. */
+it('the amber pill is distinct from the grade colors', () => {
+  for (const t of [light, dark]) {
+    for (const k of ['good-bg', 'bad-bg', 'red', 'chip']) expect(t['amber-bg']).not.toBe(t[k]);
+  }
+});
 
 describe.each([['light', light], ['dark', dark]] as const)('%s theme', (_, t) => {
   it.each(PAIRS)('%s on %s >= 4.5:1', (fg, bg) => {

@@ -2,9 +2,11 @@
   Zod schema for the parts of exports/site_data.json (schema 1.x, field docs in exports/SCHEMA.md)
   that this site reads. Unknown keys are dropped, so the export can grow without breaking the
   build; a field the site uses that disappears or changes type fails the build instead of
-  rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0. The official
-  record (`live_2026.official_bets`) and `games[].bet_side` are read only to cross-check the value
-  calls; they're never rendered.
+  rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0; the
+  Amendment 6 fields (`value_tier`, `toss_up`, `value_woe`, `prediction_quality_by_confidence`,
+  `toss_up_threshold`, `value_tier_two_star_edge`) in 1.3.0. The official record
+  (`live_2026.official_bets`) and `games[].bet_side` are read only to cross-check the value calls;
+  they're never rendered.
 */
 import { z } from 'zod';
 
@@ -18,6 +20,7 @@ const score = count.nullable();
 const side = z.enum(['home', 'away']);
 
 const rate = z.object({ k: count, n: count, value: prob.nullable() });
+const tier = z.union([z.literal(1), z.literal(2)]);
 
 export const scheduleGameSchema = z.object({
   game_id: z.string(),
@@ -46,10 +49,29 @@ export const gameSchema = z.object({
   pick_correct: z.boolean().nullable(),
   bet: z.boolean(),
   bet_side: side.nullable(),
+  /** Live games only (1.3.0): the value call's tier, decided by the exporter at full precision. */
+  value_tier: tier.nullable().optional(),
+  /** Live games only (1.3.0): the champion's favorite is at or below toss_up_threshold. */
+  toss_up: z.boolean().optional(),
 });
 
 /** The official paper record's outcome counts; the site's graded value calls must equal these. */
 const officialRecord = z.object({ wins: count, losses: count, voids: count, pending: count });
+
+/** Wins over expected for one tier (or all calls). Sums are over graded calls, pushes excluded. */
+const woeBlock = z.object({
+  calls_logged: count,
+  wins: count,
+  losses: count,
+  pushes: count,
+  n: count,
+  won: count,
+  vegas_expected: z.number().min(0),
+  woe: z.number(),
+  woe_per_call: z.number().nullable(),
+});
+
+const byConfidence = z.object({ games_logged: count, accuracy: rate });
 
 const weekSchema = z.object({
   week,
@@ -67,6 +89,10 @@ export const siteDataSchema = z
       as_of_utc: isoUtc,
       first_official_week: week,
       edge_threshold: z.number().gt(0).lt(1),
+      value_tier_two_star_edge: z.number().gt(0).lt(1),
+      toss_up_threshold: z.number().gt(0.5).lt(1),
+      value_woe: z.object({ all: woeBlock, one_star: woeBlock, two_star: woeBlock }),
+      prediction_quality_by_confidence: z.object({ confident: byConfidence, toss_up: byConfidence, all: byConfidence }),
       prediction_quality: z.object({
         champion: z.object({ accuracy: rate }),
         vegas_favorite: z.object({ accuracy: rate }),
@@ -95,6 +121,9 @@ export const siteDataSchema = z
       if (g.bet !== (g.bet_side !== null)) {
         ctx.addIssue({ code: 'custom', path: ['games'], message: `live game ${g.game_id} has bet/bet_side out of step` });
       }
+      if (g.toss_up === undefined || g.value_tier === undefined || g.bet !== (g.value_tier !== null)) {
+        ctx.addIssue({ code: 'custom', path: ['games'], message: `live game ${g.game_id} is missing toss_up/value_tier or has value_tier out of step with bet` });
+      }
     }
     for (const s of d.schedule_2026) {
       if ((s.away_score === null) !== (s.home_score === null)) {
@@ -112,7 +141,7 @@ export function parseSiteData(raw: unknown): SiteData {
   const r = siteDataSchema.safeParse(raw);
   if (!r.success) {
     const lines = r.error.issues.slice(0, 20).map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
-    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.2.0):\n${lines.join('\n')}`);
+    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.3.0):\n${lines.join('\n')}`);
   }
   return r.data;
 }

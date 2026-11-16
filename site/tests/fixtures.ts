@@ -31,6 +31,8 @@ export function live(over: Partial<Game> = {}): Game {
     pick_correct: null,
     bet: false,
     bet_side: null,
+    value_tier: null,
+    toss_up: false,
     ...over,
   };
 }

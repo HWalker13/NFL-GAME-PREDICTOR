@@ -1,5 +1,6 @@
 ---
-import { pct } from '../lib/format.ts';
+import { pct, tierText, woeHeadline } from '../lib/format.ts';
+import { tierLabel } from '../lib/card.ts';
 import { RESULTS_URL } from '../lib/links.ts';
 import type { Site } from '../lib/data.ts';
 
@@ -9,6 +10,10 @@ interface Props {
 }
 const { week, record } = Astro.props;
 const { picks, valueCalls: vc } = record;
+const graded = vc.w + vc.l > 0;
+const [woeNum, woeWords] = woeHeadline(vc.woe);
+const STARS = { 1: '★', 2: '★★' } as const;
+const pctOr = (x: number | null): string => (x === null ? '–' : pct(x));
 ---
 <header class="header">
   <div class="band">
@@ -22,12 +27,28 @@ const { picks, valueCalls: vc } = record;
       <p class="big">{picks.w}–{picks.l}</p>
       <p class="rate">{pct(picks.accuracy)} accuracy</p>
       <p class="sub">Vegas favorite {pct(picks.vegasFavorite)}</p>
+      <p class="sub">Confident picks {pctOr(picks.confident)} · Toss-ups {pctOr(picks.tossUps)}</p>
     </section>
     <section class="tile" aria-labelledby="tile-value">
       <h2 id="tile-value">Value calls</h2>
-      <p class="big">{vc.w}–{vc.l}{vc.push > 0 && <span class="push">{vc.push} {vc.push === 1 ? 'push' : 'pushes'}</span>}</p>
-      <p class="rate">{vc.hitRate === null ? 'None graded yet' : `${pct(vc.hitRate)} hit rate`}</p>
-      {vc.vegasExpected !== null && <p class="sub">Vegas expected {pct(vc.vegasExpected)}</p>}
+      {graded ? (
+        <>
+          <p class="big">{woeNum} <span class="words">{woeWords}</span></p>
+          <p class="rate">Won {vc.won} · Vegas expected {vc.vegasExpected.toFixed(1)}</p>
+          <ul class="tiers">
+            {vc.tiers.map((t) => (
+              <li>
+                <span class="stars" aria-hidden="true">{STARS[t.tier]}</span>
+                <span class="sr">{tierLabel(t.tier)}s:</span>
+                {tierText(t.n, t.woe, t.woePerCall)}
+              </li>
+            ))}
+          </ul>
+          <p class="record">Record {vc.w}–{vc.l}{vc.push > 0 && ` (${vc.push} ${vc.push === 1 ? 'push' : 'pushes'})`}</p>
+        </>
+      ) : (
+        <p class="rate">None graded yet</p>
+      )}
       <p class="caveat"><a href={RESULTS_URL}>Small sample — read this as a trend, not proof.</a></p>
     </section>
   </div>
@@ -47,7 +68,10 @@ const { picks, valueCalls: vc } = record;
   .brand a:hover { text-decoration: underline; }
   h1 { margin: 2px 0 0; font-size: 1.875rem; font-weight: 850; line-height: 1.15; letter-spacing: -0.01em; }
 
-  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .tiles { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+  @media (min-width: 480px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+  }
   .tile {
     padding: 12px 14px;
     border-radius: 12px;
@@ -64,7 +88,19 @@ const { picks, valueCalls: vc } = record;
     text-transform: uppercase;
   }
   .big { margin: 2px 0 0; font-size: 1.75rem; font-weight: 850; line-height: 1.15; font-variant-numeric: tabular-nums; }
-  .push { display: block; margin-top: -2px; font-size: 0.8125rem; font-weight: 600; line-height: 1.3; color: var(--muted); white-space: nowrap; }
+  .words { font-size: 0.9375rem; font-weight: 700; letter-spacing: 0; white-space: nowrap; }
+  .tiers { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+  .tiers li { display: grid; grid-template-columns: 2.4em 1fr; align-items: baseline; }
+  .stars { color: var(--star); letter-spacing: 0.04em; white-space: nowrap; }
+  .record { margin: 6px 0 0; color: var(--muted); font-size: 0.8125rem; }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .rate { margin: 2px 0 0; font-weight: 600; font-size: 0.9375rem; }
   .sub { margin: 2px 0 0; color: var(--muted); font-size: 0.875rem; }
   .caveat { margin: 8px 0 0; font-size: 0.75rem; line-height: 1.35; }

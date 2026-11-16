@@ -264,6 +264,100 @@ def edge_breakdown_table(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------- #
+# Amendment 6 (DESCRIPTIVE ONLY): value tiers, wins over expected, toss-ups
+# --------------------------------------------------------------------------- #
+# The two tiers merge the Section 3 edge buckets: ★ = the two lower buckets, ★★ = [0.08+).
+TIER_OF_BUCKET = {"[0.04, 0.06)": 1, "[0.06, 0.08)": 1, "[0.08+)": 2}
+TIER_LABEL = {"all": "All official value calls", 1: "★ edge [0.04, 0.08)", 2: "★★ edge [0.08+)"}
+TIER_KEYS = ("all", 1, 2)
+CONFIDENCE_LABEL = {"confident": "Confident (favorite > 0.55)", "toss_up": "Toss-up (favorite <= 0.55)",
+                    "all": "All picks"}
+AMENDMENT6_NOTE = (
+    "Descriptive only (Amendment 6). Nothing here changes the paper-bet rule, the checkpoint or the "
+    "season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge: "
+    "★ = [0.04, 0.08) (the two lower Section 3 buckets merged), ★★ = 0.08 and above. **WOE** (wins over "
+    "expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each call's "
+    "side, over graded calls with pushes excluded. **Model expected** = the sum of the calls' edges: the WOE "
+    "the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or "
+    "below; accuracy follows the usual convention (ties excluded)."
+)
+
+
+def official_value_calls(df: pd.DataFrame) -> pd.DataFrame:
+    """Official bets with their tier, own edge and own implied probability. The
+    tier from ``common.value_tier`` must agree with the Section 3 bucket
+    (``edge_bucket``) on every row, or this refuses."""
+    b = official_bets(df).copy()
+    if b.empty:
+        return b.assign(tier=pd.Series(dtype=int), side_edge=pd.Series(dtype=float),
+                        side_implied=pd.Series(dtype=float))
+    b["side_edge"] = [C.side_edge(s, h, a) for s, h, a in zip(b["paper_bet"], b["edge_home"], b["edge_away"])]
+    b["side_implied"] = [C.side_implied(s, i) for s, i in zip(b["paper_bet"], b["implied_p_home"])]
+    b["tier"] = [C.value_tier(e) for e in b["side_edge"]]
+    via_bucket = [TIER_OF_BUCKET.get(edge_bucket(e)) for e in b["side_edge"]]
+    bad = [g for g, t, v in zip(b["game_id"], b["tier"], via_bucket) if t is None or t != v]
+    if bad:
+        raise ValueError(f"value tier disagrees with the Section 3 edge bucket (or is missing) for {bad}")
+    return b
+
+
+def value_woe_rows(df: pd.DataFrame) -> dict:
+    """{"all"|1|2: counts + common.woe_summary over graded, non-push calls}."""
+    calls = official_value_calls(df)
+    out = {}
+    for key in TIER_KEYS:
+        b = calls if key == "all" else calls[calls["tier"] == key]
+        g = b[b["bet_outcome"].isin(["win", "loss"])]
+        s = C.woe_summary((g["bet_outcome"] == "win").astype(int), g["side_implied"], g["side_edge"])
+        out[key] = {"calls": len(b), "wins": int((b["bet_outcome"] == "win").sum()),
+                    "losses": int((b["bet_outcome"] == "loss").sum()),
+                    "pushes": int((b["bet_outcome"] == "void").sum()),
+                    "pending": int((b["bet_outcome"] == "pending").sum()), **s}
+    return out
+
+
+def value_woe_table(df: pd.DataFrame) -> str:
+    lines = ["| Value calls | Logged | W-L (push, pending) | n (graded, no push) | Won | Vegas expected | "
+             "Model expected | WOE | WOE per call | Model expected per call |",
+             "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for key, r in value_woe_rows(df).items():
+        lines.append(
+            f"| {TIER_LABEL[key]} | {r['calls']} | {r['wins']}-{r['losses']} ({r['pushes']}, {r['pending']}) | "
+            f"{r['n']} | {r['won']} | {fmt(r['vegas_expected'])} | {fmt(r['model_expected'])} | "
+            f"{'–' if not r['n'] else format(r['woe'], '+.3f')} | "
+            f"{'–' if not r['n'] else format(r['woe_per_call'], '+.4f')} | "
+            f"{'–' if not r['n'] else format(r['model_expected_per_call'], '+.4f')} |")
+    return "\n".join(lines)
+
+
+def confidence_rows(df: pd.DataFrame) -> dict:
+    """Champion pick accuracy for confident vs toss-up games: {"confident"|"toss_up"|"all":
+    {"logged", "acc": (k, n)}}. ``logged`` counts every graded-file row (ties and pending included)."""
+    g = df[df["model"] == "champion"]
+    toss = np.array([C.is_toss_up(p) for p in g["p_home"]], dtype=bool) if len(g) else np.array([], dtype=bool)
+    out = {}
+    for key, part in (("confident", g[~toss]), ("toss_up", g[toss]), ("all", g)):
+        d = decided(part)
+        out[key] = {"logged": len(part), "acc": (int(d["correct"].sum()), len(d))}
+    return out
+
+
+def confidence_table(df: pd.DataFrame) -> str:
+    lines = ["| Champion picks | Logged | Accuracy [95% CI] |", "|---|---:|---|"]
+    for key, r in confidence_rows(df).items():
+        k, n = r["acc"]
+        lo, hi = wilson(k, n)
+        acc = f"{k}/{n} = {k / n:.3f} [{lo:.3f}, {hi:.3f}]" if n else "–"
+        lines.append(f"| {CONFIDENCE_LABEL[key]} | {r['logged']} | {acc} |")
+    return "\n".join(lines)
+
+
+def amendment6_section(df: pd.DataFrame) -> str:
+    return ("## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)\n\n" + AMENDMENT6_NOTE + "\n\n"
+            + value_woe_table(df) + "\n\n" + confidence_table(df) + "\n")
+
+
 def weekly_table(df: pd.DataFrame) -> str:
     lines = ["| Week | Model | n | Acc | Log loss | Brier | Home acc | Vegas fav acc | Bets | Units | Mean bet CLV (n) |",
              "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
@@ -423,6 +517,7 @@ def build_markdown(df: pd.DataFrame, season: int, n_files: int, now: str, season
                  "Edge = model probability minus vig-free implied probability for the side bet, at the "
                  "prediction snapshot. ROI = units per unit staked on settled bets.\n\n"
                  + edge_breakdown_table(df) + "\n")
+    parts.append(amendment6_section(df))
     parts.append("## Weekly\n\n" + weekly_table(df) + "\n")
     parts.append(checkpoint_section(df, predicted, schedule, C.naive_utc(pd.Timestamp(now))))
     parts.append(verdict_section(df, season_complete))

@@ -11,6 +11,9 @@ export type Grade = 'win' | 'loss' | 'push' | 'open';
 
 export type Side = 'home' | 'away';
 
+/** Value-call tier (Amendment 6, display only): 1 = ★ (edge 4 to 8 points), 2 = ★★ (8 points or more). */
+export type Tier = 1 | 2;
+
 export interface TeamRow {
   abbr: string;
   score: number | null;
@@ -35,8 +38,13 @@ export interface Card {
   home: TeamRow;
   /** The team the model gives > 50%. Present only when the model logged a prediction. */
   pick: Call | null;
-  /** The team whose model probability beats Vegas's by at least the threshold, if any. */
-  valueCall: (Call & { vegasProb: number }) | null;
+  /**
+   * The team whose model probability beats Vegas's by at least the threshold, if any. `tier` is the
+   * exporter's (decided at full precision); null only when the export carries none.
+   */
+  valueCall: (Call & { vegasProb: number; tier: Tier | null }) | null;
+  /** The model's two win chances are within 10 points (the exporter's flag). False without a pick. */
+  tossUp: boolean;
   /** Both sides' probabilities, for the details bars. Null when there's no prediction. */
   probs: { modelHome: number; vegasHome: number | null } | null;
   /**
@@ -115,6 +123,7 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
         grade: gradeSide(vs, w),
         modelProb: forSide(vs, pHome),
         vegasProb: forSide(vs, vHome),
+        tier: live.value_tier ?? null,
       };
     }
   }
@@ -132,10 +141,14 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
     home,
     pick,
     valueCall,
+    tossUp: Boolean(live && pickSide && live.toss_up),
     probs,
     decimals,
   };
 }
+
+/** Accessible name for a tier's stars. */
+export const tierLabel = (t: Tier): string => (t === 2 ? 'two-star value call' : 'one-star value call');
 
 /** The plain-English line under the details bars. */
 export function detailsSentence(c: Card, p: (x: number) => string): string | null {

@@ -301,6 +301,60 @@ def paper_bet(p_home: float, home_ml: float, away_ml: float,
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Display-only views (Amendment 6). None of these changes a bet, a grade or a
+# verdict: the tiers label the bets paper_bet already placed, the toss-up flag
+# labels picks, and WOE is a descriptive sum.
+# --------------------------------------------------------------------------- #
+# ★★ cutoff = the prereg Section 3 [0.08+) edge-bucket boundary (scorecard.EDGE_BUCKETS).
+VALUE_TIER_2_EDGE = 0.08
+# Toss-up: the favorite's probability is at most this (the two sides within 10 points).
+TOSS_UP_MAX_FAV = 0.55
+
+
+def value_tier(edge: float) -> int | None:
+    """1 (★, edge in [0.04, 0.08)) or 2 (★★, edge >= 0.08) for a value call's
+    own edge; None if the edge does not qualify (or is NaN). Compared at
+    EDGE_DECIMALS, exactly like ``edge_qualifies``, so an edge of exactly 0.08
+    on paper is ★★."""
+    if pd.isna(edge) or not edge_qualifies(edge):
+        return None
+    return 2 if round(float(edge), EDGE_DECIMALS) >= VALUE_TIER_2_EDGE else 1
+
+
+def is_toss_up(p_home: float) -> bool:
+    """True when the favorite's probability is <= 0.55 (inclusive), at EDGE_DECIMALS."""
+    p = float(p_home)
+    return round(max(p, 1.0 - p), EDGE_DECIMALS) <= TOSS_UP_MAX_FAV
+
+
+def side_edge(side: str, edge_home: float, edge_away: float) -> float:
+    """The value-call side's own edge."""
+    return float(edge_home) if side == "home" else float(edge_away)
+
+
+def side_implied(side: str, implied_p_home: float) -> float:
+    """Vig-free implied probability of ``side`` winning."""
+    return float(implied_p_home) if side == "home" else 1.0 - float(implied_p_home)
+
+
+def woe_summary(won, implied_side, edge) -> dict:
+    """Wins over expected for graded, non-push value calls (one entry each).
+
+    won: 1/0 per call; implied_side: vig-free implied prob of the call's side;
+    edge: the call's own edge. ``vegas_expected`` = sum(implied_side),
+    ``woe`` = won - vegas_expected, ``model_expected`` = sum(edge) (the WOE the
+    model's own probabilities predicted). Per-call values are NaN when n = 0."""
+    won = np.asarray(won, dtype=float)
+    imp = np.asarray(implied_side, dtype=float)
+    e = np.asarray(edge, dtype=float)
+    n = len(won)
+    w, ve, me = float(won.sum()), float(imp.sum()), float(e.sum())
+    per = (lambda x: x / n) if n else (lambda x: np.nan)
+    return {"n": n, "won": int(w), "vegas_expected": ve, "model_expected": me, "woe": w - ve,
+            "woe_per_call": per(w - ve), "model_expected_per_call": per(me)}
+
+
 def bet_units(paper_bet_side: str, bet_price: float, home_score, away_score) -> tuple[str, float]:
     """(outcome, units) for one paper bet. Ties void (stake returned, 0 units)."""
     if paper_bet_side not in ("home", "away"):

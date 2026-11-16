@@ -43,3 +43,35 @@ export function primetime(iso: string): Primetime | null {
   if (p['weekday'] === 'Sun' && hour >= 19) return 'SNF';
   return null;
 }
+
+/* ---- Wins over expected (Amendment 6), counts only: no rates, no betting words ---- */
+
+/** One decimal with a true minus sign: +3.6, −1.2, 0.0. */
+export function signed1(x: number): string {
+  const r = Math.round(x * 10) / 10;
+  if (r === 0) return '0.0';
+  return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(1)}`;
+}
+
+/** The value tile's headline, split into the number and the words: "+3.6" "ahead of Vegas". */
+export function woeHeadline(woe: number): [string, string] {
+  const r = Math.round(woe * 10) / 10;
+  if (r > 0) return [`+${r.toFixed(1)}`, 'ahead of Vegas'];
+  if (r < 0) return [Math.abs(r).toFixed(1), 'behind Vegas'];
+  return ['Even', 'with Vegas'];
+}
+
+/** "+1.2 ahead" / "1.2 behind" / "even". */
+export function woeShort(woe: number): string {
+  const r = Math.round(woe * 10) / 10;
+  if (r > 0) return `+${r.toFixed(1)} ahead`;
+  if (r < 0) return `${Math.abs(r).toFixed(1)} behind`;
+  return 'even';
+}
+
+/** A tier line after its stars: "22 calls · +1.2 ahead (+0.6 per 10 calls)". */
+export function tierText(n: number, woe: number, woePerCall: number | null): string {
+  const calls = `${n} ${n === 1 ? 'call' : 'calls'}`;
+  if (n === 0 || woePerCall === null) return `${calls} · none graded yet`;
+  return `${calls} · ${woeShort(woe)} (${signed1(woePerCall * 10)} per 10 calls)`;
+}

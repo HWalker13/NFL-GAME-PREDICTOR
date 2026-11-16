@@ -1,7 +1,8 @@
 /*
   Tokens. Every text/background pair is checked in tests/contrast.test.ts (WCAG AA: 4.5:1 for
   text, 3:1 for the bar fills), light and dark. Navy and red are the accents; green and red are
-  used only for the ✓/✗ grades, which always carry an icon and a word too.
+  used only for the ✓/✗ grades, which always carry an icon and a word too. Amber marks the
+  toss-up pill and the value-tier stars, so it never reads as a grade.
 */
 :root {
   --bg: #f2f3f6;
@@ -24,6 +25,9 @@
   --bad-bg: #fbe6e4;
   --bar-away: #013369;
   --bar-home: #6b788c;
+  --amber-bg: #fbe7a8;
+  --on-amber: #4f3500;
+  --star: #8a5a00;
   color-scheme: light;
 }
 
@@ -49,6 +53,9 @@
     --bad-bg: #3b1619;
     --bar-away: #93b6ff;
     --bar-home: #7d8aa0;
+    --amber-bg: #4a3608;
+    --on-amber: #ffe08a;
+    --star: #f2c14e;
     color-scheme: dark;
   }
 }

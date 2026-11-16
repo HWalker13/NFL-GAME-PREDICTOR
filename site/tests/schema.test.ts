@@ -34,6 +34,23 @@ describe('schema', () => {
     expect(() => parseSiteData(d)).toThrow(/does not match schedule_2026/);
   });
 
+  it('rejects a 1.2 export without the Amendment 6 fields', () => {
+    const d = raw();
+    delete d['live_2026'].value_woe;
+    expect(() => parseSiteData(d)).toThrow(/value_woe/);
+  });
+
+  it('rejects a live game missing its toss-up flag, or a tier out of step with the value call', () => {
+    const d = raw();
+    const g = d['games'].find((x: { evaluation: string }) => x.evaluation === 'live_2026');
+    delete g.toss_up;
+    expect(() => parseSiteData(d)).toThrow(/toss_up/);
+    const e = raw();
+    const b = e['games'].find((x: { evaluation: string; bet: boolean }) => x.evaluation === 'live_2026' && x.bet);
+    b.value_tier = null;
+    expect(() => parseSiteData(e)).toThrow(/value_tier/);
+  });
+
   it('rejects a missing edge threshold', () => {
     const d = raw();
     delete d['live_2026'].edge_threshold;

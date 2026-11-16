@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCard, detailsSentence, gradeSide, meetsThreshold, type Card } from '../src/lib/card.ts';
-import { buildSite, crossCheckValueCalls, loadSiteData, valueCallStats } from '../src/lib/data.ts';
-import { kickoffEt, pct, primetime } from '../src/lib/format.ts';
+import { buildSite, crossCheckAmendment6, crossCheckValueCalls, loadSiteData, valueCallStats } from '../src/lib/data.ts';
+import { kickoffEt, pct, primetime, signed1, tierText, woeHeadline, woeShort } from '../src/lib/format.ts';
 import { live, sched } from './fixtures.ts';
 
 const NOW = new Date('2026-11-20T00:00:00Z'); // after every fixture kickoff
@@ -104,7 +104,7 @@ describe('value call', () => {
 
   it('season value-call record (W-L-push) equals the official record', () => {
     const d = loadSiteData();
-    const vc = buildSite(d).record.valueCalls;
+    const vc = valueCallStats([...buildSite(d).pages.values()].flatMap((p) => p.cards));
     const o = d.live_2026.official_bets;
     expect([vc.w, vc.l, vc.push]).toEqual([o.wins, o.losses, o.voids]);
     expect(vc.push).toBeGreaterThan(0); // the real data has a tie (week 5 NYG at WAS)
@@ -114,7 +114,7 @@ describe('value call', () => {
     const d = loadSiteData();
     const site = buildSite(d);
     const cards = new Map([...site.pages.values()].flatMap((p) => p.cards).map((c) => [c.gameId, c]));
-    const vc = site.record.valueCalls;
+    const vc = valueCallStats([...cards.values()]);
     expect(() => crossCheckValueCalls(d, cards, vc)).not.toThrow();
     expect(() => crossCheckValueCalls(d, cards, { ...vc, w: vc.w + 1 })).toThrow(/official/);
     const g = d.games.find((x) => x.evaluation === 'live_2026' && x.bet)!;
@@ -125,7 +125,7 @@ describe('value call', () => {
   });
 });
 
-describe('Vegas expected', () => {
+describe('Vegas expected (site-side sum, used to cross-check the export)', () => {
   // Four value calls on a fixture: two wins, a loss, a push and one still open.
   const mk = (id: string, p: number, v: number, score: [number, number] | null): Card =>
     buildCard(
@@ -143,14 +143,82 @@ describe('Vegas expected', () => {
     mk('f', 0.6, 0.59, [3, 0]), // under the threshold: no call
   ];
 
-  it('averages Vegas no-vig probability for the call side over graded calls, pushes excluded', () => {
+  it('sums Vegas no-vig probability for the call side over graded calls, pushes excluded', () => {
     const s = valueCallStats(cards);
-    expect([s.w, s.l, s.push]).toEqual([2, 1, 1]);
-    expect(s.hitRate).toBeCloseTo(2 / 3, 10);
-    expect(s.vegasExpected).toBeCloseTo((0.6 + 0.26 + 0.45) / 3, 10);
+    expect([s.w, s.l, s.push, s.calls]).toEqual([2, 1, 1, 5]);
+    expect(s.vegasSum).toBeCloseTo(0.6 + 0.26 + 0.45, 10);
   });
-  it('is null before anything is graded', () => {
-    expect(valueCallStats([cards[4]!])).toMatchObject({ w: 0, l: 0, push: 0, hitRate: null, vegasExpected: null });
+  it('is zero before anything is graded', () => {
+    expect(valueCallStats([cards[4]!])).toMatchObject({ w: 0, l: 0, push: 0, calls: 1, vegasSum: 0 });
+  });
+});
+
+describe('tiers and toss-ups (Amendment 6)', () => {
+  it("the value call carries the exporter's tier; the pick never does", () => {
+    const c = buildCard(sched(), live({ model_home_prob: 0.64, vegas_implied_home_prob: 0.74, value_tier: 2, bet: true, bet_side: 'away' }), T, NOW);
+    expect(c.valueCall).toMatchObject({ team: 'DEN', tier: 2 });
+    expect(c.pick).not.toHaveProperty('tier');
+  });
+  it("toss-up comes from the exporter's flag, and only on a card with a pick", () => {
+    expect(buildCard(sched(), live({ model_home_prob: 0.53, toss_up: true }), T, NOW).tossUp).toBe(true);
+    expect(buildCard(sched(), live({ toss_up: false }), T, NOW).tossUp).toBe(false);
+    expect(buildCard(sched(), undefined, T, NOW).tossUp).toBe(false);
+  });
+  it('a toss-up keeps its pick chip', () => {
+    const c = buildCard(sched(), live({ model_home_prob: 0.52, model_pick: 'home', toss_up: true }), T, NOW);
+    expect(c.pick?.team).toBe('KC');
+  });
+
+  it('the real export passes the cross-check, with both tiers and toss-ups present', () => {
+    const d = loadSiteData();
+    const site = buildSite(d);
+    const cards = [...site.pages.values()].flatMap((p) => p.cards);
+    expect(() => crossCheckAmendment6(d, cards)).not.toThrow();
+    expect(cards.some((c) => c.valueCall?.tier === 1)).toBe(true);
+    expect(cards.some((c) => c.valueCall?.tier === 2)).toBe(true);
+    expect(cards.some((c) => c.tossUp)).toBe(true);
+    const v = site.record.valueCalls;
+    expect(v.tiers.map((t) => t.n).reduce((a, b) => a + b)).toBe(v.w + v.l);
+  });
+
+  it('fails the build when the export and the cards disagree', () => {
+    const d = loadSiteData();
+    const cards = [...buildSite(d).pages.values()].flatMap((p) => p.cards);
+    const L = d.live_2026;
+    const bump = (key: 'one_star' | 'two_star' | 'all', f: 'wins' | 'calls_logged' | 'vegas_expected', by: number) => ({
+      ...d, live_2026: { ...L, value_woe: { ...L.value_woe, [key]: { ...L.value_woe[key], [f]: L.value_woe[key][f] + by } } },
+    });
+    expect(() => crossCheckAmendment6(bump('two_star', 'wins', 1), cards)).toThrow(/two_star/);
+    expect(() => crossCheckAmendment6(bump('one_star', 'calls_logged', 1), cards)).toThrow(/one_star/);
+    expect(() => crossCheckAmendment6(bump('all', 'vegas_expected', 0.5), cards)).toThrow(/Vegas expected/);
+    const conf = L.prediction_quality_by_confidence;
+    const badConf = { ...d, live_2026: { ...L, prediction_quality_by_confidence: { ...conf, toss_up: { ...conf.toss_up, games_logged: conf.toss_up.games_logged + 1 } } } };
+    expect(() => crossCheckAmendment6(badConf, cards)).toThrow(/toss_up picks/);
+    // a tier flipped on one card, far from the cutoff, is caught by the 4 dp recomputation
+    const i = cards.findIndex((c) => c.valueCall && Math.abs(c.valueCall.modelProb - c.valueCall.vegasProb - 0.08) > 0.01);
+    const flipped = cards.map((c, j) => (j === i ? { ...c, valueCall: { ...c.valueCall!, tier: (3 - c.valueCall!.tier!) as 1 | 2 } } : c));
+    expect(() => crossCheckAmendment6(d, flipped)).toThrow(cards[i]!.gameId);
+    // a toss-up flag flipped on a lopsided game is caught too
+    const k = cards.findIndex((c) => c.probs && Math.max(c.probs.modelHome, 1 - c.probs.modelHome) > 0.6);
+    const flippedToss = cards.map((c, j) => (j === k ? { ...c, tossUp: true } : c));
+    expect(() => crossCheckAmendment6(d, flippedToss)).toThrow(cards[k]!.gameId);
+  });
+});
+
+describe('value tile wording (counts only)', () => {
+  it('headline ahead, behind and even', () => {
+    expect(woeHeadline(3.6114)).toEqual(['+3.6', 'ahead of Vegas']);
+    expect(woeHeadline(-1.24)).toEqual(['1.2', 'behind Vegas']);
+    expect(woeHeadline(0.04)).toEqual(['Even', 'with Vegas']);
+    expect(woeHeadline(-0.04)).toEqual(['Even', 'with Vegas']);
+  });
+  it('tier line, including the negative case', () => {
+    expect(tierText(22, 1.2207, 0.0555)).toBe('22 calls · +1.2 ahead (+0.6 per 10 calls)');
+    expect(tierText(30, -1.24, -0.0413)).toBe('30 calls · 1.2 behind (−0.4 per 10 calls)');
+    expect(tierText(1, 0.6, 0.6)).toBe('1 call · +0.6 ahead (+6.0 per 10 calls)');
+    expect(tierText(0, 0, null)).toBe('0 calls · none graded yet');
+    expect(woeShort(0)).toBe('even');
+    expect(signed1(-0.04)).toBe('0.0');
   });
 });
 
