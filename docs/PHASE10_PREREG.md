@@ -348,3 +348,33 @@ On the clean pipeline the oracle agrees with every `_ewm` value to within 8.9e-1
 *Scope.* Test-only: Check 1 only becomes stricter. No change to `features.py`, `scripts/live/common.py`, `scripts/live/predict_week.py`, any model file, any logged prediction, the paper-bet rule, the CLV rule or the checkpoint. Code change: `src/leakage_checks.py` (sha256 `b47f91298353da7405c6621920daf0a4cbed6c211ffa89259dccc37e7b3012ae` → `2c53139737837bc2bcb3048cda09218cb452be84ac68e884f0833f4c9105503d`). Also changed: `audit/scripts/negative_control.py` and its output `audit/out/negative_control.json`. Appendix B hashes record drafting time and are intentionally not updated.
 
 *Disclosure.* This amendment is written **after** live 2026 results were visible (weeks 3–8 graded, week 10 logged). It is legitimate because it cannot change any prediction or verdict. Check 1 is a pre-model audit of how the features are computed. It never feeds a model, a probability, a bet, a grade, the checkpoint or the season-end CLV verdict, and on the clean pipeline its result is unchanged (PASS).
+
+**Amendment 6 (2026-11-15, owner):** display-only toss-up flag, two value tiers, and wins over expected (WOE). Three descriptive views are added to the scorecard, the site export and the public site. **Unchanged:** the paper-bet rule (Section 2), its 0.04 threshold and 10-decimal comparison, settlement, the frozen models and their sha256s, `src/features.py`, every logged prediction, every graded file, the checkpoint (Section 5, Amendment 4), the CLV rule (Amendment 3) and the season-end verdict (Section 4). No value call is added or removed.
+
+*Definitions.*
+- **Toss-up:** a game whose champion probabilities are within 10 points of each other, i.e. `round(max(p_home, 1 − p_home), 10) <= 0.55` (inclusive), at full precision. The model's pick is still made and graded; the flag only labels it.
+- **Value tiers**, on the official value call's edge (model probability minus vig-free implied probability for the side taken, at the prediction snapshot), with the same 10-decimal rounding as `edge_qualifies`: **★ = [0.04, 0.08)**, **★★ = 0.08 and above**. An edge of exactly 0.08 is ★★.
+- **WOE:** over graded official value calls, ties (pushes) excluded, Σ (1 if the side won else 0) − vig-free implied probability of that side. **Vegas expected** is the second sum; **model expected** is Σ edge over the same calls (the WOE the model's own probabilities predicted). Each is reported overall and per tier, with n and per-call values (sum ÷ n).
+
+*Reason.* The tiers come from the Section 3 edge-size buckets, [0.04, 0.06), [0.06, 0.08) and [0.08+), approved in commit `4b79dec` (2026-09-23), before any official prediction or result existed. The 0.08 cutoff is that existing bucket boundary. The two lower buckets are merged into ★ to keep per-tier samples larger and the site readable; the owner chose two tiers over three on sample-size and readability grounds, not on bucket performance. **Disclosure:** per-bucket results (W-L, units, ROI, CLV) have been visible in `docs/live/SCORECARD_2026.md` since week 3. The cutoff was not chosen from them; it is the pre-registered boundary. The toss-up cutoff (0.55) is **new**, set by the owner on 2026-11-15. Before this amendment was committed, only toss-up **counts** were computed (21 of 90 logged games), and no toss-up results (accuracy, record or any other outcome). WOE gives readers a count-based comparison with the market that does not use betting language. Overall WOE and model expected (unsplit) were computed once in the read-only audit that preceded this amendment; no per-tier WOE was computed. **WOE and model expected are descriptive only**: they cannot change the paper-bet rule, the checkpoint, or the Section 4 season-end verdict, which still rests on CLV alone.
+
+*Effect* (counts only, from the official prediction files, champion rows, weeks 3–8 and 10, full precision):
+
+| Quantity | Value |
+|---|---|
+| Games logged | 90 |
+| Toss-ups (favorite ≤ 0.55) | 21 (none within ±0.002 of 0.55) |
+| Official value calls logged | 58 (53 graded: 28–24–1; 5 pending, week 10) |
+| ★ calls logged / ★★ calls logged | 25 / 33 (none exactly at 0.08; nearest edges 0.0793, 0.0795, 0.0813) |
+
+No change to any official record: the official value calls remain **28–24–1 graded plus 5 pending**, identical before and after.
+
+*Scope.* No prediction, model, `features.py`, grade or bet changes, and nothing under `data/live/` is rewritten. Code changes (Stage 2, after this amendment is committed):
+- `scripts/live/common.py`: `value_tier`, `is_toss_up` and WOE helpers (sha256 `010aae41…` before).
+- `scripts/live/scorecard.py`: a new descriptive section with WOE, Vegas expected, model expected, n and per-call values (overall and per tier), and pick accuracy for toss-up vs confident games (sha256 `e61acb39…` before).
+- `scripts/export_site_data.py`: per-game `value_tier` and `toss_up`, `live_2026.toss_up_threshold`, `live_2026.value_woe`, the toss-up/confident accuracy split, schema 1.3.0, and cross-checks against the scorecard (sha256 `0f9197c1…` before); `exports/SCHEMA.md`; `exports/site_data.json` regenerated.
+- Tests: `scripts/test_phase10_live.py`, `scripts/test_export_site_data.py`.
+- Site: `site/src/lib/schema.ts`, `site/src/lib/card.ts`, `site/src/lib/data.ts`, `site/src/components/GameCard.astro`, `site/src/components/Header.astro`, and the site tests.
+- Regenerated by the owner: `docs/live/SCORECARD_2026.md` (`scorecard --live`).
+
+Appendix B hashes record drafting time and are intentionally not updated.
