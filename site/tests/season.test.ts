@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildSite, loadSiteData } from '../src/lib/data.ts';
+import { buildSite } from '../src/lib/data.ts';
 import { currentWeek, weekBanner, weekInfo } from '../src/lib/season.ts';
 import { buildCard } from '../src/lib/card.ts';
 import { sched } from './fixtures.ts';
+import { loadFixture, loadReal } from './exports.ts';
 
 const played = { away_score: 17, home_score: 24 };
 
@@ -27,8 +28,8 @@ describe('currentWeek', () => {
     expect(currentWeek([sched({ game_id: 'a', week: 18, ...played })])).toBe(18);
   });
 
-  it('picks week 10 from the real export (scores through week 9)', () => {
-    const site = buildSite(loadSiteData());
+  it('picks week 10 from the 2026-11-12 fixture (scores through week 9)', () => {
+    const site = buildSite(loadFixture());
     expect(site.current).toBe(10);
   });
 });
@@ -41,8 +42,8 @@ describe('a fixed "now" decides only upcoming vs score pending', () => {
   it('after kickoff with no score in the data: score pending', () => {
     expect(buildCard(g, undefined, 0.04, new Date('2026-11-15T18:00:00Z')).status).toBe('score-pending');
   });
-  it('the build uses the snapshot time, not the wall clock', () => {
-    const d = loadSiteData();
+  it('the build uses the snapshot time, not the wall clock (2026-11-12 fixture)', () => {
+    const d = loadFixture();
     const site = buildSite(d);
     const first = site.pages.get(10)?.cards.find((c) => c.gameId === '2026_10_WAS_NYG');
     // kicked off 2026-11-13T01:15Z, after the 2026-11-12T21:09Z snapshot
@@ -51,12 +52,12 @@ describe('a fixed "now" decides only upcoming vs score pending', () => {
   });
 });
 
-describe('week kinds and banners', () => {
-  const d = loadSiteData();
+describe('week kinds and banners (2026-11-12 fixture)', () => {
+  const d = loadFixture();
   const site = buildSite(d);
   const info = (w: number) => weekInfo(w, d.live_2026.first_official_week, d.live_2026.weeks, d.schedule_2026);
 
-  it('classifies the real season', () => {
+  it('classifies the season as of 2026-11-12', () => {
     expect([1, 2].map((w) => info(w).kind)).toEqual(['before-tracking', 'before-tracking']);
     expect([3, 4, 5, 6, 7].map((w) => info(w).kind)).toEqual(Array(5).fill('tracked'));
     expect(info(8).kind).toBe('partial');
@@ -76,9 +77,20 @@ describe('week kinds and banners', () => {
     );
   });
 
+});
+
+describe.each([
+  ['the real export', loadReal],
+  ['the 2026-11-12 fixture', loadFixture],
+])('every week, from %s', (_, load) => {
   it('has a card for every scheduled game and a pick for every logged one', () => {
+    const d = load();
+    const site = buildSite(d);
     for (const w of site.weeks) {
       const page = site.pages.get(w.week);
+      expect(page?.cards.map((c) => c.gameId).sort(), `week ${w.week}`).toEqual(
+        d.schedule_2026.filter((g) => g.week === w.week).map((g) => g.game_id).sort(),
+      );
       expect(page?.cards.length).toBe(w.scheduled);
       expect(page?.cards.filter((c) => c.pick).length).toBe(w.kind === 'before-tracking' ? 0 : w.predicted);
     }

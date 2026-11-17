@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { dataPath, loadSiteData } from '../src/lib/data.ts';
+import { REAL_PATH, loadReal } from './exports.ts';
 import { parseSiteData } from '../src/lib/schema.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately mutated into invalid shapes
-const raw = (): any => JSON.parse(readFileSync(dataPath(), 'utf8'));
+const raw = (): any => JSON.parse(readFileSync(REAL_PATH, 'utf8'));
 
 describe('schema', () => {
   it('parses the real export', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     expect(d.schema_version).toMatch(/^1\.\d+\.\d+$/);
     expect(d.schedule_2026.length).toBeGreaterThan(250);
     expect(d.live_2026.edge_threshold).toBe(0.04);

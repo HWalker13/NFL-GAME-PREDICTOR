@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildCard, detailsSentence, gradeSide, meetsThreshold, type Card } from '../src/lib/card.ts';
-import { buildSite, crossCheckAmendment6, crossCheckValueCalls, loadSiteData, valueCallStats } from '../src/lib/data.ts';
+import { buildSite, crossCheckAmendment6, crossCheckValueCalls, valueCallStats } from '../src/lib/data.ts';
 import { kickoffEt, pct, primetime, signed1, tierText, woeHeadline, woeShort } from '../src/lib/format.ts';
 import { live, sched } from './fixtures.ts';
+import { loadFixture, loadReal } from './exports.ts';
 
 const NOW = new Date('2026-11-20T00:00:00Z'); // after every fixture kickoff
 const T = 0.04;
@@ -33,7 +34,7 @@ describe('pick grade matches the pick and the score', () => {
   });
 
   it('agrees with the exporter on every graded live game', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const sch = new Map(d.schedule_2026.map((g) => [g.game_id, g]));
     const graded = d.games.filter((g) => g.evaluation === 'live_2026' && g.pick_correct !== null);
     expect(graded.length).toBeGreaterThan(50);
@@ -92,7 +93,7 @@ describe('value call', () => {
   });
 
   it("matches the exporter's flag and side on every real live game", () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const sch = new Map(d.schedule_2026.map((g) => [g.game_id, g]));
     const games = d.games.filter((g) => g.evaluation === 'live_2026');
     for (const g of games) {
@@ -103,7 +104,7 @@ describe('value call', () => {
   });
 
   it('season value-call record (W-L-push) equals the official record', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const vc = valueCallStats([...buildSite(d).pages.values()].flatMap((p) => p.cards));
     const o = d.live_2026.official_bets;
     expect([vc.w, vc.l, vc.push]).toEqual([o.wins, o.losses, o.voids]);
@@ -111,7 +112,7 @@ describe('value call', () => {
   });
 
   it('the cross-check fails the build on a side mismatch or a record mismatch', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const site = buildSite(d);
     const cards = new Map([...site.pages.values()].flatMap((p) => p.cards).map((c) => [c.gameId, c]));
     const vc = valueCallStats([...cards.values()]);
@@ -170,7 +171,7 @@ describe('tiers and toss-ups (Amendment 6)', () => {
   });
 
   it('the real export passes the cross-check, with both tiers and toss-ups present', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const site = buildSite(d);
     const cards = [...site.pages.values()].flatMap((p) => p.cards);
     expect(() => crossCheckAmendment6(d, cards)).not.toThrow();
@@ -182,7 +183,7 @@ describe('tiers and toss-ups (Amendment 6)', () => {
   });
 
   it('fails the build when the export and the cards disagree', () => {
-    const d = loadSiteData();
+    const d = loadReal();
     const cards = [...buildSite(d).pages.values()].flatMap((p) => p.cards);
     const L = d.live_2026;
     const bump = (key: 'one_star' | 'two_star' | 'all', f: 'wins' | 'calls_logged' | 'vegas_expected', by: number) => ({
@@ -239,8 +240,8 @@ describe('details sentence', () => {
 });
 
 describe('one decimal when a percentage would read as 50%', () => {
-  it('week 10 NE at DET: every percentage on the card gets one decimal', () => {
-    const d = loadSiteData();
+  it('week 10 NE at DET (2026-11-12 fixture): every percentage on the card gets one decimal', () => {
+    const d = loadFixture();
     const g = d.games.find((x) => x.game_id === '2026_10_NE_DET')!;
     const s = d.schedule_2026.find((x) => x.game_id === '2026_10_NE_DET')!;
     expect([g.model_home_prob, g.vegas_implied_home_prob]).toEqual([0.5037, 0.583]);
