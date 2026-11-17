@@ -380,3 +380,51 @@ No change to any official record: the official value calls remain **28–24–1 
 Appendix B hashes record drafting time and are intentionally not updated.
 
 *Addendum to Amendment 6 (2026-11-15, owner): code hashes.* Recorded after the Stage 2 build; Amendment 6's text above is unchanged. `scripts/live/common.py` sha256 `010aae41…` → `0f3422fa…`; `scripts/live/scorecard.py` sha256 `e61acb39…` → `eb681cff…`; `scripts/export_site_data.py` sha256 `0f9197c1…` → `580488a7…`. The paper-bet rule's code (`edge_qualifies`, `paper_bet`, `bet_units`) is byte-for-byte unchanged inside `common.py`; the diff only adds the display-only helpers.
+
+**Amendment 7 (2026-11-17, owner):** three display tiers, Lean / ★ / ★★, replace Amendment 6's two value tiers. This supersedes **only** Amendment 6's value-tier definitions; its toss-up flag (0.55) and its WOE, Vegas expected and model expected definitions are unchanged. **Unchanged:** the paper-bet rule (Section 2), its 0.04 threshold and 10-decimal comparison, settlement, the frozen models and their sha256s, `src/features.py`, every logged prediction, every graded file, the checkpoint (Section 5, Amendment 4), the CLV rule (Amendment 3) and the season-end verdict (Section 4). No value call is added or removed, and the official record (**29–28–1** through week 10) is identical before and after.
+
+*Definitions.*
+- **Value tiers**, on the official value call's own edge (model probability minus vig-free implied probability for the side taken, at the prediction snapshot), compared with the same 10-decimal rounding as `edge_qualifies`:
+  - **Lean** = [0.04, 0.11)
+  - **★** = [0.11, 0.16)
+  - **★★** = 0.16 and above
+
+  An edge of exactly 0.11 is ★, and an edge of exactly 0.16 is ★★. Every official value call falls in exactly one tier. A Lean is still an official value call: it is graded and counted in the official record like any other.
+- **WOE, Vegas expected, model expected:** as defined in Amendment 6. They are reported overall and for each of the three tiers, with n and per-call values (sum ÷ n). The three tiers sum to the overall figures and to the official record.
+
+*Reason.* Under Amendment 6, ★★ (edge ≥ 0.08) covered 33 of 58 official value calls, a majority, which defeats the purpose of a rare top tier. **Before seeing any edge counts**, the owner fixed rarity targets: any star (★ or ★★) on ≈25% of all games, and ★★ on ≈10% of all games. The cutoffs were then chosen as the whole numbers (in edge points) closest to those targets on the held-out 2023–24 and 2025 seasons (815 games). For those seasons, edges were computed with the champion model type's raw probabilities (LR-tuned walk-forward predictions for 2023–24, `holdout_2025_predictions.parquet` for 2025) against the vig-free moneyline, using **edge sizes only. No outcome column was loaded** (script: `audit/scripts/edge_tiers.py`, read-only, run with `venv/bin/python -W ignore -m audit.scripts.edge_tiers`; first run 2026-11-17 from a session scratchpad copy, sha256 `668c58f0…`; the repo copy's histograms, quantile cutoffs and cutoff-share table are identical to that run's output, and it adds the tier counts and full-precision near-cutoff edges quoted below). On the pooled held-out seasons, the exact quantile cutoffs were 10.77 points (top 25%) and 16.12 points (top 10%). 11 is closer to the 25% target than 10 (23.7% vs 28.5% starred), and 16 is closer to the 10% target than 15 or 17 (10.3% vs 12.6% / 8.8%). **Disclosure:** Amendment 6's per-tier results were visible on the site and in `docs/live/SCORECARD_2026.md` before this amendment: WOE per call was +0.0426 for ★ and +0.0381 for ★★, so there was no performance difference between the old tiers. This change is motivated by tier **frequency**, not tier performance, and no per-tier outcome under the new cutoffs was computed before this amendment was committed. **WOE and model expected stay descriptive only**: they cannot change the paper-bet rule, the checkpoint, or the Section 4 season-end verdict, which still rests on CLV alone.
+
+*Effect* (counts only, edges at 10-decimal rounding):
+
+| Set | Games | Value calls | Lean | ★ | ★★ | Starred (★ or ★★) / ★★, % of all games |
+|---|---:|---:|---:|---:|---:|---|
+| Held-out 2023–24 | 544 | 377 | 240 | 77 | 60 | 25.2% / 11.0% |
+| Held-out 2025 | 271 | 172 | 116 | 32 | 24 | 20.7% / 8.9% |
+| **Held-out pooled** | **815** | **549** | **356** | **109** | **84** | **23.7% / 10.3%** |
+| 2026 live (champion, weeks 3–8, 10, 11 logged; week 9 missed, week 8 one game) | 103 | 66 (58 through week 10 + 8 pending, week 11) | 45 | 12 | 9 | 20.4% / 8.7% |
+
+Games within 0.2 edge points of a cutoff:
+- **At 0.11:**
+  - 2026: `2026_04_ARI_NYG` 0.1119 (★) and `2026_06_NYJ_NE` 0.1083 (Lean).
+  - 2023–24: `2023_11_LAC_GB` 0.1097, `2024_08_NYG_PIT` 0.1089, `2024_09_DET_GB` 0.1098, `2024_11_MIN_TEN` 0.1098, `2024_12_TB_NYG` 0.1097, `2024_13_HOU_JAX` 0.1091 and `2024_18_CIN_PIT` 0.1106.
+  - 2025: `2025_08_WAS_KC` 0.1091, `2025_11_NYJ_NE` 0.1084, `2025_13_HOU_IND` 0.1092, `2025_15_WAS_NYG` 0.1091, `2025_16_PIT_DET` 0.1106, `2025_17_NYG_LV` 0.1112 and `2025_18_IND_HOU` 0.1105.
+- **At 0.16:**
+  - 2026: none (nearest is `2026_05_CLE_NYJ` 0.1629).
+  - 2023–24: `2023_05_BAL_PIT` 0.1619, `2023_08_NYJ_NYG` 0.160076 (★★), `2023_15_LAC_LV` 0.1609 and `2023_16_BUF_LAC` 0.159972 (★).
+  - 2025: `2025_01_TB_ATL` 0.1613 and `2025_18_MIA_NE` 0.1620.
+
+No 2026 edge is exactly 0.11 or 0.16.
+
+*Scope.* No prediction, model, `features.py`, grade or bet changes, and nothing under `data/live/` is rewritten. Code changes (Stage 2, after this amendment is committed; sha256 prefixes before):
+- `scripts/live/common.py` (`0f3422fa…`): `value_tier` returns `"lean"` | `"one_star"` | `"two_star"` (None if the edge does not qualify) at the new cutoffs. The paper-bet rule's code (`edge_qualifies`, `paper_bet`, `bet_units`) is not touched.
+- `scripts/live/scorecard.py` (`eb681cff…`): the Amendment 6 section becomes three tier rows (Lean, ★, ★★). The toss-up table is kept.
+- `scripts/export_site_data.py` (`580488a7…`): per-game `value_tier` with the new values, the `live_2026` tier cutoffs exported as constants, and `value_woe` for all / lean / one_star / two_star. Schema bumped to 1.4.0. `exports/SCHEMA.md` (`650989d3…`) is updated, and `exports/site_data.json` is regenerated by the owner.
+- Tests: `scripts/test_phase10_live.py` (`f74c59ca…`; boundary tests at exactly 0.11 and 0.16 and just below each) and `scripts/test_export_site_data.py` (`2efcda50…`; tiers sum to the official record, tier WOEs sum to the overall WOE).
+- Site:
+  - `site/src/lib/schema.ts` (`ab7c657f…`), `site/src/lib/card.ts` (`9992fa7e…`) and `site/src/lib/data.ts` (`e52431cc…`).
+  - `site/src/components/GameCard.astro` (`5059a289…`; muted Lean chip, ★ and ★★ chips) and `site/src/components/Header.astro` (`ba0de68c…`; three tier rows in the value tile).
+  - Site tests: `site/tests/build.test.ts` (`5c81efa7…`), `card.test.ts` (`1a57f280…`), `contrast.test.ts` (`6199ee49…`), `fixtures.ts` (`9ef4e0b6…`) and `schema.test.ts` (`bce503a2…`).
+  - The fixture `site/tests/fixtures/site_data_2026-11-12.json` (`b63cce3b…`) is regenerated by the recipe in its `README.md` (`045e9415…`, updated).
+- Regenerated by the owner: `docs/live/SCORECARD_2026.md` (`scorecard --live`), the live metrics and `exports/site_data.json`.
+
+Appendix B hashes record drafting time and are intentionally not updated.
