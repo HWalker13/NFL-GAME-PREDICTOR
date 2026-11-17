@@ -265,18 +265,20 @@ def edge_breakdown_table(df: pd.DataFrame) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Amendment 6 (DESCRIPTIVE ONLY): value tiers, wins over expected, toss-ups
+# Amendments 6 and 7 (DESCRIPTIVE ONLY): value tiers, wins over expected, toss-ups
 # --------------------------------------------------------------------------- #
-# The two tiers merge the Section 3 edge buckets: ★ = the two lower buckets, ★★ = [0.08+).
-TIER_OF_BUCKET = {"[0.04, 0.06)": 1, "[0.06, 0.08)": 1, "[0.08+)": 2}
-TIER_LABEL = {"all": "All official value calls", 1: "★ edge [0.04, 0.08)", 2: "★★ edge [0.08+)"}
-TIER_KEYS = ("all", 1, 2)
+# Amendment 7's three tiers (common.value_tier) supersede Amendment 6's two. They no
+# longer coincide with the Section 3 edge buckets, which stay as pre-registered above.
+TIER_LABEL = {"all": "All official value calls", "lean": "Lean edge [0.04, 0.11)",
+              "one_star": "★ edge [0.11, 0.16)", "two_star": "★★ edge [0.16+)"}
+TIER_KEYS = ("all",) + C.VALUE_TIERS
 CONFIDENCE_LABEL = {"confident": "Confident (favorite > 0.55)", "toss_up": "Toss-up (favorite <= 0.55)",
                     "all": "All picks"}
 AMENDMENT6_NOTE = (
-    "Descriptive only (Amendment 6). Nothing here changes the paper-bet rule, the checkpoint or the "
-    "season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge: "
-    "★ = [0.04, 0.08) (the two lower Section 3 buckets merged), ★★ = 0.08 and above. **WOE** (wins over "
+    "Descriptive only (Amendments 6 and 7). Nothing here changes the paper-bet rule, the checkpoint or the "
+    "season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge "
+    "(Amendment 7): Lean = [0.04, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above. A Lean is still an official "
+    "value call. **WOE** (wins over "
     "expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each call's "
     "side, over graded calls with pushes excluded. **Model expected** = the sum of the calls' edges: the WOE "
     "the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or "
@@ -285,25 +287,24 @@ AMENDMENT6_NOTE = (
 
 
 def official_value_calls(df: pd.DataFrame) -> pd.DataFrame:
-    """Official bets with their tier, own edge and own implied probability. The
-    tier from ``common.value_tier`` must agree with the Section 3 bucket
-    (``edge_bucket``) on every row, or this refuses."""
+    """Official bets with their tier, own edge and own implied probability. Every
+    official bet qualified under the bet rule, so ``common.value_tier`` must give
+    it a tier; a missing tier refuses."""
     b = official_bets(df).copy()
     if b.empty:
-        return b.assign(tier=pd.Series(dtype=int), side_edge=pd.Series(dtype=float),
+        return b.assign(tier=pd.Series(dtype=object), side_edge=pd.Series(dtype=float),
                         side_implied=pd.Series(dtype=float))
     b["side_edge"] = [C.side_edge(s, h, a) for s, h, a in zip(b["paper_bet"], b["edge_home"], b["edge_away"])]
     b["side_implied"] = [C.side_implied(s, i) for s, i in zip(b["paper_bet"], b["implied_p_home"])]
     b["tier"] = [C.value_tier(e) for e in b["side_edge"]]
-    via_bucket = [TIER_OF_BUCKET.get(edge_bucket(e)) for e in b["side_edge"]]
-    bad = [g for g, t, v in zip(b["game_id"], b["tier"], via_bucket) if t is None or t != v]
+    bad = [g for g, t in zip(b["game_id"], b["tier"]) if t not in C.VALUE_TIERS]
     if bad:
-        raise ValueError(f"value tier disagrees with the Section 3 edge bucket (or is missing) for {bad}")
+        raise ValueError(f"official value call without a value tier (edge below the bet threshold?) for {bad}")
     return b
 
 
 def value_woe_rows(df: pd.DataFrame) -> dict:
-    """{"all"|1|2: counts + common.woe_summary over graded, non-push calls}."""
+    """{"all"|"lean"|"one_star"|"two_star": counts + common.woe_summary over graded, non-push calls}."""
     calls = official_value_calls(df)
     out = {}
     for key in TIER_KEYS:

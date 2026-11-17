@@ -2,7 +2,9 @@
   Builds the real site (astro build into a temp dir) twice and checks the output:
   - from the real export (../exports/site_data.json): only invariants that hold every week
     (every page, no client JS or JSON, no betting vocabulary, a card for every scheduled game,
-    header numbers equal the export, toss-up pills only on flagged games, no "50%");
+    header numbers equal the export, starred value chips = the export's ★/★★ calls, no value chip
+    and the "slight value" sentence on lean-tier calls, no visible "Lean", toss-up pills only on
+    flagged games, no "50%");
   - from the frozen 2026-11-12 fixture (tests/fixtures/): the exact rendered values.
 */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -17,6 +19,42 @@ const articles = (h: string): string[] => h.match(/<article[\s\S]*?<\/article>/g
 /** Games the export flags as toss-ups in week w, as "AWAY at HOME", sorted. */
 const tossUpsIn = (d: SiteData, w: number): string[] =>
   d.games.filter((g) => g.evaluation === 'live_2026' && g.week === w && g.toss_up).map((g) => `${g.away} at ${g.home}`).sort();
+
+/** Every card on a page as [label "AWAY at HOME", article html]. */
+const cardsOf = (html: string): [string, string][] =>
+  [...html.matchAll(/<article[^>]*aria-label="([A-Z]+ at [A-Z]+)"[\s\S]*?<\/article>/g)].map((m) => [m[1]!, m[0]]);
+
+/** Starred value chips on a page by tier, as "AWAY at HOME TEAM", sorted. Lean-tier calls have no chip. */
+function valueChips(html: string): Record<'one_star' | 'two_star', string[]> {
+  const out: Record<'one_star' | 'two_star', string[]> = { one_star: [], two_star: [] };
+  for (const [label, card] of cardsOf(html)) {
+    const star = card.match(/Value call <span class="stars[^"]*"[^>]*>(★{1,2})<\/span><\/span><span class="sr[^"]*"[^>]*>(one|two)-star value call<\/span>: <strong[^>]*>([A-Z]+)</);
+    if (star) {
+      expect(star[1]!.length === 1 ? 'one' : 'two', label).toBe(star[2]);
+      out[star[1]!.length === 1 ? 'one_star' : 'two_star'].push(`${label} ${star[3]}`);
+    }
+  }
+  out.one_star.sort();
+  out.two_star.sort();
+  return out;
+}
+
+/** The export's value calls in week w by tier (all three), as "AWAY at HOME TEAM", sorted. */
+function exportTiers(d: SiteData, w: number): Record<'lean' | 'one_star' | 'two_star', string[]> {
+  const out: Record<'lean' | 'one_star' | 'two_star', string[]> = { lean: [], one_star: [], two_star: [] };
+  for (const g of d.games) {
+    if (g.evaluation !== 'live_2026' || g.week !== w || !g.bet) continue;
+    out[g.value_tier!].push(`${g.away} at ${g.home} ${g.bet_side === 'home' ? g.home : g.away}`);
+  }
+  for (const k of Object.keys(out) as (keyof typeof out)[]) out[k].sort();
+  return out;
+}
+
+/** The export's starred (★/★★) calls in week w, in valueChips' format. */
+const exportStarred = (d: SiteData, w: number) => {
+  const { one_star, two_star } = exportTiers(d, w);
+  return { one_star, two_star };
+};
 
 /** Cards on a page that carry the TOSS UP pill; asserts the pill sits in the top row next to a kept pick chip. */
 function tossPills(html: string): string[] {
@@ -73,7 +111,7 @@ describe('build output from the real export (invariants, every week)', () => {
       const ts = flat(t);
       expect(ts, f).toMatch(/Picks \d+–\d+ \d+% accuracy Vegas favorite \d+% Confident picks \d+% · Toss-ups \d+%/);
       expect(ts, f).toMatch(
-        /Value calls (?:\+\d+\.\d ahead of Vegas|\d+\.\d behind Vegas|Even with Vegas) Won \d+ · Vegas expected \d+\.\d ★ one-star value calls: \d+ calls? · .+ ★★ two-star value calls: \d+ calls? · .+ Record \d+–\d+/,
+        /Value calls (?:\+\d+\.\d ahead of Vegas|\d+\.\d behind Vegas|Even with Vegas) Won \d+ · Vegas expected \d+\.\d ★ one-star value calls: \d+ calls? · .+ ★★ two-star value calls: \d+ calls? · .+ Smaller edges \(in game details\) \d+ calls? · .+ Record \d+–\d+/,
       );
       expect(ts, f).not.toMatch(/hit rate/i);
       expect(ts, f).toContain('Small sample — read this as a trend, not proof.');
@@ -86,7 +124,7 @@ describe('build output from the real export (invariants, every week)', () => {
     }
   });
 
-  it('header numbers equal the export: picks record, value-call record (official_bets) and tier counts', () => {
+  it('header numbers equal the export: picks record, value-call record (official_bets) and the three tier counts', () => {
     const q = d.live_2026.prediction_quality.champion.accuracy;
     const o = d.live_2026.official_bets;
     const vw = d.live_2026.value_woe;
@@ -99,6 +137,9 @@ describe('build output from the real export (invariants, every week)', () => {
       expect(t, f).toMatch(new RegExp(`${record.replace(/[()]/g, '\\$&')}(?![\\d(])`));
       expect(t, f).toContain(`★ one-star value calls: ${calls(vw.one_star.n)} · `);
       expect(t, f).toContain(`★★ two-star value calls: ${calls(vw.two_star.n)} · `);
+      expect(t, f).toContain(`Smaller edges (in game details) ${calls(vw.lean.n)} · `);
+      // the headline and Record cover all official value calls: the three rows add up to them
+      expect(vw.lean.n + vw.one_star.n + vw.two_star.n).toBe(o.wins + o.losses);
     }
   });
 
@@ -140,11 +181,70 @@ describe('build output from the real export (invariants, every week)', () => {
     expect(withPick).toBeGreaterThan(90);
   });
 
-  it('every value chip carries a tier; no pick chip does', () => {
+  it('every value chip carries stars; no pick chip does', () => {
     for (const f of b.files) {
       for (const card of articles(b.html(f))) {
         expect(/Value call: /.test(card), `${f} untiered value chip`).toBe(false);
         expect(/Pick <span class="stars/.test(card), f).toBe(false);
+      }
+    }
+  });
+
+  it('the visible word "Lean" never appears (text, screen-reader text, attributes, any case)', () => {
+    for (const f of b.files) {
+      expect(b.text(f), f).not.toMatch(/\blean\b/i);
+      expect(b.html(f), f).not.toMatch(/\bLean\b/);
+    }
+  });
+
+  it('no value chip on lean-tier games: the pick chip only', () => {
+    let n = 0;
+    for (let w = 1; w <= 18; w++) {
+      const cards = new Map(cardsOf(b.html(`week/${w}/index.html`)));
+      for (const g of d.games) {
+        if (g.evaluation !== 'live_2026' || g.week !== w || !g.bet || g.value_tier !== 'lean') continue;
+        const card = cards.get(`${g.away} at ${g.home}`)!;
+        expect(card, `${g.game_id}`).toBeDefined();
+        expect(card.match(/<li class="chip /g)?.length, g.game_id).toBe(1);
+        expect(card, g.game_id).toMatch(/Pick: <strong/);
+        expect(card, g.game_id).not.toMatch(/Value call/);
+        n++;
+      }
+    }
+    expect(n).toBe(d.live_2026.value_woe.lean.calls_logged);
+    expect(n).toBeGreaterThan(0);
+  });
+
+  it("starred value chips are exactly the export's ★/★★ calls, and their count is one_star + two_star, week by week", () => {
+    let total = 0;
+    for (let w = 1; w <= 18; w++) {
+      const h = b.html(`week/${w}/index.html`);
+      const got = valueChips(h);
+      expect(got, `week ${w}`).toEqual(exportStarred(d, w));
+      const want = d.games.filter((g) => g.evaluation === 'live_2026' && g.week === w && g.bet && (g.value_tier === 'one_star' || g.value_tier === 'two_star')).length;
+      const chipCount = (h.match(/>Value call <span class="stars/g) ?? []).length;
+      expect(chipCount, `week ${w}`).toBe(want);
+      total += chipCount;
+    }
+    const vw = d.live_2026.value_woe;
+    expect(total).toBe(vw.one_star.calls_logged + vw.two_star.calls_logged);
+  });
+
+  it("details sentence: lean-tier calls 'slight value', starred calls 'underrated', other games neither", () => {
+    const L = new Map(d.games.filter((g) => g.evaluation === 'live_2026').map((g) => [`${g.week} ${g.away} at ${g.home}`, g]));
+    for (let w = 1; w <= 18; w++) {
+      for (const [label, card] of cardsOf(b.html(`week/${w}/index.html`))) {
+        const g = L.get(`${w} ${label}`);
+        const why = flat(card.match(/<p class="why[^"]*"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? '');
+        if (!g || !g.model_pick) continue;
+        const team = g.bet ? (g.bet_side === 'home' ? g.home : g.away) : null;
+        if (g.bet && g.value_tier === 'lean') {
+          expect(why, g.game_id).toMatch(new RegExp(`^Model gives ${team} [\\d.]+%, Vegas [\\d.]+% — the model sees slight value on ${team}\\.$`));
+        } else if (g.bet) {
+          expect(why, g.game_id).toMatch(new RegExp(`— the model thinks ${team} is underrated\\.$`));
+        } else {
+          expect(why, g.game_id).not.toMatch(/slight value|underrated/);
+        }
       }
     }
   });
@@ -205,8 +305,9 @@ describe('build output from the 2026-11-12 fixture (exact values)', () => {
     expect(t).toContain('Picks 44–31 59% accuracy Vegas favorite 60% Confident picks 63% · Toss-ups 44%');
     expect(t).toContain(
       'Value calls +3.6 ahead of Vegas Won 28 · Vegas expected 24.4 ' +
-        '★ one-star value calls: 22 calls · +1.2 ahead (+0.6 per 10 calls) ' +
-        '★★ two-star value calls: 30 calls · +2.4 ahead (+0.8 per 10 calls) ' +
+        '★ one-star value calls: 10 calls · +1.4 ahead (+1.4 per 10 calls) ' +
+        '★★ two-star value calls: 8 calls · +2.1 ahead (+2.7 per 10 calls) ' +
+        'Smaller edges (in game details) 34 calls · +0.1 ahead (0.0 per 10 calls) ' +
         'Record 28–24 (1 push)',
     );
   });
@@ -219,24 +320,46 @@ describe('build output from the 2026-11-12 fixture (exact values)', () => {
     expect(t('week/12/index.html')).not.toMatch(/Picks \d+–\d+ ·/);
   });
 
-  it('chips: pick and value call, with icon and text', () => {
+  it('chips: pick, ★ and ★★ value calls, with icon and text; lean-tier calls get no chip', () => {
     const w7 = html('week/7/index.html');
     expect(w7).toMatch(/class="chip win[^"]*"[\s\S]*?<svg[\s\S]*?Pick: <strong[^>]*>[A-Z]{2,3}<\/strong>[\s\S]*?\(correct\)/);
     expect(w7).toMatch(/class="chip loss[^"]*"[\s\S]*?<svg[\s\S]*?\(wrong\)/);
-    expect(flat(text('week/7/index.html'))).toMatch(/Value call ★{1,2} (?:one|two)-star value call : [A-Z]{2,3}/);
+    const t7 = flat(text('week/7/index.html'));
+    expect(t7).toContain('Value call ★ one-star value call : NE (wrong)');
+    expect(t7).toContain('Value call ★★ two-star value call : MIA (correct)');
+    // week 7's lean-tier calls (MIN ✓, NO ✗): details sentence only, no chip
+    expect(t7).toMatch(/Model gives MIN \d+%, Vegas \d+% — the model sees slight value on MIN\./);
+    expect(t7).toMatch(/Model gives NO \d+%, Vegas \d+% — the model sees slight value on NO\./);
+    expect(t7).not.toMatch(/Value call [^:]*: (?:MIN|NO)\b/);
+    expect(w7).not.toMatch(/class="chip[^"]*\blean\b/);
     const w5 = flat(text('week/5/index.html'));
     expect(w5).toMatch(/Pick: WAS · Tie/);
-    expect(w5).toMatch(/Value call ★{1,2} (?:one|two)-star value call : NYG · Push/);
+    expect(w5).not.toMatch(/NYG · Push/); // the week 5 push was a lean-tier call: no chip
+    expect(w5).toMatch(/the model sees slight value on NYG\./);
     expect(html('week/10/index.html')).toMatch(/class="chip open[^"]*"/);
+  });
+
+  it('week 3: starred chips match the fixture; its six lean-tier calls have no chip', () => {
+    expect(valueChips(html('week/3/index.html'))).toEqual({
+      one_star: ['LA at DEN DEN', 'PHI at CHI CHI', 'TEN at NYG NYG'],
+      two_star: ['CIN at PIT PIT', 'KC at MIA MIA'],
+    });
+    expect(exportTiers(d, 3).lean).toEqual(['ATL at GB GB', 'CAR at CLE CLE', 'HOU at IND HOU', 'LAC at BUF BUF', 'LV at NO NO', 'NYJ at DET DET']);
+    const w3 = new Map(cardsOf(html('week/3/index.html')));
+    for (const g of ['ATL at GB', 'CAR at CLE', 'HOU at IND', 'LAC at BUF', 'LV at NO', 'NYJ at DET']) {
+      expect(w3.get(g)!.match(/<li class="chip /g)?.length, g).toBe(1);
+      expect(w3.get(g), g).toMatch(/the model sees slight value on [A-Z]+\./);
+    }
+    for (const w of [3, 5, 7, 10]) expect(valueChips(html(`week/${w}/index.html`)), `week ${w}`).toEqual(exportStarred(d, w));
   });
 
   it('week 10 NE at DET: one decimal everywhere, details bars and sentence', () => {
     const w10 = flat(text('week/10/index.html'));
     expect(w10).toContain('Pick: DET');
-    expect(w10).toMatch(/Value call ★{1,2} (?:one|two)-star value call : NE/);
+    expect(w10).not.toMatch(/Value call [^:]*: NE\b/); // NE is a lean-tier call: no chip
     expect(w10).toContain('Model NE 49.6% DET 50.4%');
     expect(w10).toContain('Vegas NE 41.7% DET 58.3%');
-    expect(w10).toContain('Model gives NE 49.6%, Vegas 41.7% — the model thinks NE is underrated.');
+    expect(w10).toContain('Model gives NE 49.6%, Vegas 41.7% — the model sees slight value on NE.');
     expect(w10).toMatch(/Model WAS \d+% NYG \d+%/); // other cards stay whole numbers
   });
 

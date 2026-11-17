@@ -7,7 +7,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseSiteData, type Game, type ScheduleGame, type SiteData } from './schema.ts';
-import { buildCard, type Card, type Grade, type Tier } from './card.ts';
+import { buildCard, tierOf, TIERS, type Card, type Grade, type Tier } from './card.ts';
 import { WEEKS, currentWeek, weekBanner, weekInfo, type WeekInfo } from './season.ts';
 
 export function dataPath(): string {
@@ -72,28 +72,28 @@ export interface TierLine {
   woePerCall: number | null;
 }
 
-/** The value tile: counts only (Amendment 6). WOE numbers are the exporter's. */
+/** The value tile: counts only (Amendments 6 and 7). WOE numbers are the exporter's. */
 export interface ValueRecord extends Tally {
   won: number;
   vegasExpected: number;
   woe: number;
+  /** Lean, ★, ★★, in that order. */
   tiers: TierLine[];
 }
 
-const TIER_KEY = { 1: 'one_star', 2: 'two_star' } as const;
-
 /**
- * Fails the build unless the export's Amendment 6 numbers agree with the cards: per-tier and overall
- * call counts and W-L-push equal value_woe; the site's own Vegas-expected sums (from 4 dp
- * probabilities) are within rounding of the exporter's; the toss-up / confident pick records equal
+ * Fails the build unless the export's Amendment 6/7 numbers agree with the cards: for all calls and
+ * for each of the three tiers (Lean, ★, ★★), call counts and W-L-push equal value_woe; the site's own
+ * Vegas-expected sums (from 4 dp probabilities) are within rounding of the exporter's; the three
+ * tiers add up to all calls and to the official record; the toss-up / confident pick records equal
  * prediction_quality_by_confidence; and each per-game flag agrees with a recomputation from the 4 dp
- * probabilities wherever that recomputation is clear of the cutoff.
+ * probabilities wherever that recomputation is clear of the cutoffs.
  */
 export function crossCheckAmendment6(d: SiteData, cards: readonly Card[]): void {
   const errors: string[] = [];
   const L = d.live_2026;
   const vw = L.value_woe;
-  const blocks = [['all', undefined], ['one_star', 1], ['two_star', 2]] as const;
+  const blocks = [['all', undefined], ...TIERS.map((t) => [t, t] as const)] as const;
   for (const [key, tier] of blocks) {
     const site = valueCallStats(cards, tier);
     const e = vw[key];
@@ -104,6 +104,14 @@ export function crossCheckAmendment6(d: SiteData, cards: readonly Card[]): void 
     if (Math.abs(site.vegasSum - e.vegas_expected) > e.n * 1e-4 + 2e-4) {
       errors.push(`${key}: site Vegas expected ${site.vegasSum.toFixed(4)} vs export ${e.vegas_expected}`);
     }
+  }
+  for (const f of ['calls_logged', 'wins', 'losses', 'pushes', 'n', 'won'] as const) {
+    const sum = TIERS.reduce((a, t) => a + vw[t][f], 0);
+    if (sum !== vw.all[f]) errors.push(`tiers' ${f} sum to ${sum}, all calls have ${vw.all[f]}`);
+  }
+  for (const f of ['vegas_expected', 'woe'] as const) {
+    const sum = TIERS.reduce((a, t) => a + vw[t][f], 0);
+    if (Math.abs(sum - vw.all[f]) > 2.5e-4) errors.push(`tiers' ${f} sum to ${sum.toFixed(4)}, all calls have ${vw.all[f]}`);
   }
   const o = L.official_bets;
   if (vw.all.wins !== o.wins || vw.all.losses !== o.losses || vw.all.pushes !== o.voids) {
@@ -127,8 +135,9 @@ export function crossCheckAmendment6(d: SiteData, cards: readonly Card[]): void 
     const v = c.valueCall;
     if (v) {
       const edge = v.modelProb - v.vegasProb;
+      const clear = [L.value_tier_one_star_edge, L.value_tier_two_star_edge].every((x) => Math.abs(edge - x) > 2e-4);
       if (v.tier === null) errors.push(`${c.gameId}: value call without a tier`);
-      else if (Math.abs(edge - L.value_tier_two_star_edge) > 2e-4 && v.tier !== (edge >= L.value_tier_two_star_edge ? 2 : 1)) {
+      else if (clear && v.tier !== tierOf(edge, L.value_tier_one_star_edge, L.value_tier_two_star_edge)) {
         errors.push(`${c.gameId}: tier ${v.tier} but the edge is ${edge.toFixed(4)}`);
       }
     }
@@ -231,8 +240,8 @@ export function buildSite(d: SiteData): Site {
         won: vw.all.won,
         vegasExpected: vw.all.vegas_expected,
         woe: vw.all.woe,
-        tiers: ([1, 2] as const).map((t) => {
-          const e = vw[TIER_KEY[t]];
+        tiers: TIERS.map((t) => {
+          const e = vw[t];
           return { tier: t, n: e.n, woe: e.woe, woePerCall: e.woe_per_call };
         }),
       },

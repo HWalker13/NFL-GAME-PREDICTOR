@@ -18787,7 +18787,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6854,
       "week": 3
@@ -18817,7 +18817,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.417,
       "week": 3
@@ -18847,7 +18847,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3775,
       "week": 3
@@ -18877,7 +18877,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4365,
       "week": 3
@@ -18907,7 +18907,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.1629,
       "week": 3
@@ -18937,7 +18937,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.7409,
       "week": 3
@@ -18997,7 +18997,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.7221,
       "week": 3
@@ -19057,7 +19057,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5635,
       "week": 3
@@ -19177,7 +19177,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6309,
       "week": 3
@@ -19207,7 +19207,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4365,
       "week": 3
@@ -19237,7 +19237,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3364,
       "week": 3
@@ -19297,7 +19297,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3691,
       "week": 4
@@ -19327,7 +19327,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4486,
       "week": 4
@@ -19357,7 +19357,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5934,
       "week": 4
@@ -19387,7 +19387,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3775,
       "week": 4
@@ -19417,7 +19417,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5635,
       "week": 4
@@ -19447,7 +19447,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4066,
       "week": 4
@@ -19477,7 +19477,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.7136,
       "week": 4
@@ -19507,7 +19507,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6092,
       "week": 4
@@ -19567,7 +19567,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.8223,
       "week": 4
@@ -19597,7 +19597,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5721,
       "week": 4
@@ -19657,7 +19657,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.76,
       "week": 4
@@ -19747,7 +19747,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.7914,
       "week": 5
@@ -19807,7 +19807,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4279,
       "week": 5
@@ -19837,7 +19837,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.2591,
       "week": 5
@@ -19867,7 +19867,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5427,
       "week": 5
@@ -19927,7 +19927,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5721,
       "week": 5
@@ -19957,7 +19957,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6369,
       "week": 5
@@ -20017,7 +20017,7 @@
       "result": "tie",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6092,
       "week": 5
@@ -20107,7 +20107,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.583,
       "week": 5
@@ -20137,7 +20137,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6164,
       "week": 5
@@ -20167,7 +20167,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5934,
       "week": 5
@@ -20197,7 +20197,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4365,
       "week": 6
@@ -20227,7 +20227,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5635,
       "week": 6
@@ -20287,7 +20287,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.5,
       "week": 6
@@ -20317,7 +20317,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.417,
       "week": 6
@@ -20347,7 +20347,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4826,
       "week": 6
@@ -20377,7 +20377,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.7409,
       "week": 6
@@ -20407,7 +20407,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4365,
       "week": 6
@@ -20467,7 +20467,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.8579,
       "week": 6
@@ -20497,7 +20497,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3092,
       "week": 6
@@ -20527,7 +20527,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.8,
       "week": 6
@@ -20557,7 +20557,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5261,
       "week": 6
@@ -20617,7 +20617,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.583,
       "week": 7
@@ -20647,7 +20647,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3775,
       "week": 7
@@ -20677,7 +20677,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.4783,
       "week": 7
@@ -20737,7 +20737,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.705,
       "week": 7
@@ -20767,7 +20767,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.669,
       "week": 7
@@ -20827,7 +20827,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.417,
       "week": 7
@@ -20917,7 +20917,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5996,
       "week": 7
@@ -20977,7 +20977,7 @@
       "result": "home",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.5721,
       "week": 7
@@ -21007,7 +21007,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "two_star",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.3364,
       "week": 7
@@ -21037,7 +21037,7 @@
       "result": "away",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6092,
       "week": 8
@@ -21097,7 +21097,7 @@
       "result": "pending",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.583,
       "week": 10
@@ -21127,7 +21127,7 @@
       "result": "pending",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 1,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.2181,
       "week": 10
@@ -21277,7 +21277,7 @@
       "result": "pending",
       "season": 2026,
       "toss_up": true,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.6447,
       "week": 10
@@ -21307,7 +21307,7 @@
       "result": "pending",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "one_star",
       "vegas_favorite": "home",
       "vegas_implied_home_prob": 0.583,
       "week": 10
@@ -21337,7 +21337,7 @@
       "result": "pending",
       "season": 2026,
       "toss_up": false,
-      "value_tier": 2,
+      "value_tier": "lean",
       "vegas_favorite": "away",
       "vegas_implied_home_prob": 0.1957,
       "week": 10
@@ -21859,7 +21859,7 @@
     }
   },
   "live_2026": {
-    "amendment_6_note": "Value tiers, wins over expected and the toss-up flag are descriptive only (docs/PHASE10_PREREG.md Amendment 6). They change no bet, grade or verdict; the season-end verdict rests on CLV alone.",
+    "amendment_6_note": "Value tiers, wins over expected and the toss-up flag are descriptive only (docs/PHASE10_PREREG.md Amendments 6 and 7). They change no bet, grade or verdict; the season-end verdict rests on CLV alone.",
     "as_of_source": "latest schedule snapshot schedules_2026_20261112T210940Z.parquet",
     "as_of_utc": "2026-11-12T21:09:40Z",
     "challenger_bets_hypothetical": {
@@ -22106,7 +22106,8 @@
     "provenance_note": "prediction_committed_at is the local git author time of the commit that added each week's prediction file. The owner's computer sets it, so it is not proof of push time.",
     "ties": 1,
     "toss_up_threshold": 0.55,
-    "value_tier_two_star_edge": 0.08,
+    "value_tier_one_star_edge": 0.11,
+    "value_tier_two_star_edge": 0.16,
     "value_woe": {
       "all": {
         "calls_graded": 53,
@@ -22122,33 +22123,47 @@
         "woe_per_call": 0.0695,
         "won": 28
       },
-      "one_star": {
-        "calls_graded": 23,
-        "calls_logged": 25,
-        "losses": 9,
-        "model_expected": 1.337,
-        "model_expected_per_call": 0.0608,
-        "n": 22,
+      "lean": {
+        "calls_graded": 35,
+        "calls_logged": 38,
+        "losses": 17,
+        "model_expected": 2.4977,
+        "model_expected_per_call": 0.0735,
+        "n": 34,
         "pushes": 1,
-        "vegas_expected": 11.7793,
-        "wins": 13,
-        "woe": 1.2207,
-        "woe_per_call": 0.0555,
-        "won": 13
+        "vegas_expected": 16.946,
+        "wins": 17,
+        "woe": 0.054,
+        "woe_per_call": 0.0016,
+        "won": 17
+      },
+      "one_star": {
+        "calls_graded": 10,
+        "calls_logged": 12,
+        "losses": 4,
+        "model_expected": 1.327,
+        "model_expected_per_call": 0.1327,
+        "n": 10,
+        "pushes": 0,
+        "vegas_expected": 4.5761,
+        "wins": 6,
+        "woe": 1.4239,
+        "woe_per_call": 0.1424,
+        "won": 6
       },
       "two_star": {
-        "calls_graded": 30,
-        "calls_logged": 33,
-        "losses": 15,
-        "model_expected": 4.1161,
-        "model_expected_per_call": 0.1372,
-        "n": 30,
+        "calls_graded": 8,
+        "calls_logged": 8,
+        "losses": 3,
+        "model_expected": 1.6283,
+        "model_expected_per_call": 0.2035,
+        "n": 8,
         "pushes": 0,
-        "vegas_expected": 12.6093,
-        "wins": 15,
-        "woe": 2.3907,
-        "woe_per_call": 0.0797,
-        "won": 15
+        "vegas_expected": 2.8665,
+        "wins": 5,
+        "woe": 2.1335,
+        "woe_per_call": 0.2667,
+        "won": 5
       }
     },
     "weeks": [
@@ -25134,12 +25149,15 @@
       "week": 18
     }
   ],
-  "schema_version": "1.3.0",
+  "schema_version": "1.4.0",
   "source_commit": {
     "dirty": true,
     "dirty_paths": [
       "data/raw/snapshots/schedules_2026_20261115T145029Z.parquet",
-      "data/raw/snapshots/schedules_2026_20261115T202714Z.parquet"
+      "data/raw/snapshots/schedules_2026_20261115T202714Z.parquet",
+      "scripts/export_site_data.py",
+      "scripts/live/common.py",
+      "scripts/live/scorecard.py"
     ],
     "hash": "c9f235411c6e52e5789b3c0f77877b7c458f7277"
   }

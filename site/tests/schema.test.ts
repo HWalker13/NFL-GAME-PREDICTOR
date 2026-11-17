@@ -51,6 +51,28 @@ describe('schema', () => {
     expect(() => parseSiteData(e)).toThrow(/value_tier/);
   });
 
+  it('rejects a 1.3 export: numeric tiers, no Lean block, no one-star cutoff', () => {
+    const d = raw();
+    const b = d['games'].find((x: { evaluation: string; bet: boolean }) => x.evaluation === 'live_2026' && x.bet);
+    b.value_tier = 2;
+    expect(() => parseSiteData(d)).toThrow(/value_tier/);
+    const e = raw();
+    delete e['live_2026'].value_woe.lean;
+    expect(() => parseSiteData(e)).toThrow(/value_woe\.lean/);
+    const f = raw();
+    delete f['live_2026'].value_tier_one_star_edge;
+    expect(() => parseSiteData(f)).toThrow(/value_tier_one_star_edge/);
+  });
+
+  it('accepts exactly the three Amendment 7 tiers, with cutoffs in order', () => {
+    const d = loadReal();
+    const tiers = new Set(d.games.filter((g) => g.evaluation === 'live_2026' && g.bet).map((g) => g.value_tier));
+    expect([...tiers].sort()).toEqual(['lean', 'one_star', 'two_star']);
+    const e = raw();
+    e['live_2026'].value_tier_one_star_edge = 0.2;
+    expect(() => parseSiteData(e)).toThrow(/cutoffs out of order/);
+  });
+
   it('rejects a missing edge threshold', () => {
     const d = raw();
     delete d['live_2026'].edge_threshold;

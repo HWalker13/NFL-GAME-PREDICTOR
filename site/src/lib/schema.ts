@@ -4,7 +4,8 @@
   build; a field the site uses that disappears or changes type fails the build instead of
   rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0; the
   Amendment 6 fields (`value_tier`, `toss_up`, `value_woe`, `prediction_quality_by_confidence`,
-  `toss_up_threshold`, `value_tier_two_star_edge`) in 1.3.0. The official record
+  `toss_up_threshold`, `value_tier_two_star_edge`) in 1.3.0; Amendment 7's three tiers (string
+  `value_tier`, `value_woe.lean`, `value_tier_one_star_edge`) in 1.4.0. The official record
   (`live_2026.official_bets`) and `games[].bet_side` are read only to cross-check the value calls;
   they're never rendered.
 */
@@ -20,7 +21,8 @@ const score = count.nullable();
 const side = z.enum(['home', 'away']);
 
 const rate = z.object({ k: count, n: count, value: prob.nullable() });
-const tier = z.union([z.literal(1), z.literal(2)]);
+/** Amendment 7 display tier of an official value call. */
+const tier = z.enum(['lean', 'one_star', 'two_star']);
 
 export const scheduleGameSchema = z.object({
   game_id: z.string(),
@@ -49,7 +51,7 @@ export const gameSchema = z.object({
   pick_correct: z.boolean().nullable(),
   bet: z.boolean(),
   bet_side: side.nullable(),
-  /** Live games only (1.3.0): the value call's tier, decided by the exporter at full precision. */
+  /** Live games only (1.4.0): the value call's tier, decided by the exporter at full precision. */
   value_tier: tier.nullable().optional(),
   /** Live games only (1.3.0): the champion's favorite is at or below toss_up_threshold. */
   toss_up: z.boolean().optional(),
@@ -89,9 +91,10 @@ export const siteDataSchema = z
       as_of_utc: isoUtc,
       first_official_week: week,
       edge_threshold: z.number().gt(0).lt(1),
+      value_tier_one_star_edge: z.number().gt(0).lt(1),
       value_tier_two_star_edge: z.number().gt(0).lt(1),
       toss_up_threshold: z.number().gt(0.5).lt(1),
-      value_woe: z.object({ all: woeBlock, one_star: woeBlock, two_star: woeBlock }),
+      value_woe: z.object({ all: woeBlock, lean: woeBlock, one_star: woeBlock, two_star: woeBlock }),
       prediction_quality_by_confidence: z.object({ confident: byConfidence, toss_up: byConfidence, all: byConfidence }),
       prediction_quality: z.object({
         champion: z.object({ accuracy: rate }),
@@ -104,6 +107,10 @@ export const siteDataSchema = z
     games: z.array(gameSchema),
   })
   .superRefine((d, ctx) => {
+    const L = d.live_2026;
+    if (!(L.edge_threshold < L.value_tier_one_star_edge && L.value_tier_one_star_edge < L.value_tier_two_star_edge)) {
+      ctx.addIssue({ code: 'custom', path: ['live_2026'], message: 'tier cutoffs out of order (edge_threshold < one-star < two-star)' });
+    }
     const weeks = new Set(d.schedule_2026.map((g) => g.week));
     for (let w = 1; w <= 18; w++) {
       if (!weeks.has(w)) ctx.addIssue({ code: 'custom', path: ['schedule_2026'], message: `no games in week ${w}` });
@@ -141,7 +148,7 @@ export function parseSiteData(raw: unknown): SiteData {
   const r = siteDataSchema.safeParse(raw);
   if (!r.success) {
     const lines = r.error.issues.slice(0, 20).map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
-    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.3.0):\n${lines.join('\n')}`);
+    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.4.0):\n${lines.join('\n')}`);
   }
   return r.data;
 }

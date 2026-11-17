@@ -1,6 +1,6 @@
 ---
 import { pct, tierText, woeHeadline } from '../lib/format.ts';
-import { tierLabel } from '../lib/card.ts';
+import { STARS, tierLabel } from '../lib/card.ts';
 import { RESULTS_URL } from '../lib/links.ts';
 import type { Site } from '../lib/data.ts';
 
@@ -12,8 +12,14 @@ const { week, record } = Astro.props;
 const { picks, valueCalls: vc } = record;
 const graded = vc.w + vc.l > 0;
 const [woeNum, woeWords] = woeHeadline(vc.woe);
-const STARS = { 1: '★', 2: '★★' } as const;
 const pctOr = (x: number | null): string => (x === null ? '–' : pct(x));
+/*
+  Display note (2026-11-17): the headline and Record cover ALL official value calls; the rows are ★,
+  ★★, then the lean tier as "Smaller edges" (no card chip; shown in game details). The word "Lean"
+  is never shown.
+*/
+const starred = vc.tiers.filter((t) => t.tier !== 'lean');
+const smaller = vc.tiers.find((t) => t.tier === 'lean');
 ---
 <header class="header">
   <div class="band">
@@ -36,13 +42,19 @@ const pctOr = (x: number | null): string => (x === null ? '–' : pct(x));
           <p class="big">{woeNum} <span class="words">{woeWords}</span></p>
           <p class="rate">Won {vc.won} · Vegas expected {vc.vegasExpected.toFixed(1)}</p>
           <ul class="tiers">
-            {vc.tiers.map((t) => (
+            {starred.map((t) => (
               <li>
                 <span class="stars" aria-hidden="true">{STARS[t.tier]}</span>
                 <span class="sr">{tierLabel(t.tier)}s:</span>
                 {tierText(t.n, t.woe, t.woePerCall)}
               </li>
             ))}
+            {smaller && (
+              <li class="smaller">
+                <span class="label">Smaller edges <span class="hint">(in game details)</span></span>
+                {' '}{tierText(smaller.n, smaller.woe, smaller.woePerCall)}
+              </li>
+            )}
           </ul>
           <p class="record">Record {vc.w}–{vc.l}{vc.push > 0 && ` (${vc.push} ${vc.push === 1 ? 'push' : 'pushes'})`}</p>
         </>
@@ -90,8 +102,11 @@ const pctOr = (x: number | null): string => (x === null ? '–' : pct(x));
   .big { margin: 2px 0 0; font-size: 1.75rem; font-weight: 850; line-height: 1.15; font-variant-numeric: tabular-nums; }
   .words { font-size: 0.9375rem; font-weight: 700; letter-spacing: 0; white-space: nowrap; }
   .tiers { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-  .tiers li { display: grid; grid-template-columns: 2.4em 1fr; align-items: baseline; }
+  .tiers li { display: grid; grid-template-columns: 3em 1fr; align-items: baseline; }
   .stars { color: var(--star); letter-spacing: 0.04em; white-space: nowrap; }
+  .tiers li.smaller { display: block; }
+  .label { font-weight: 700; }
+  .hint { color: var(--muted); font-weight: 500; }
   .record { margin: 6px 0 0; color: var(--muted); font-size: 0.8125rem; }
   .sr {
     position: absolute;

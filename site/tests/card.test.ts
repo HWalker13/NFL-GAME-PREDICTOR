@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCard, detailsSentence, gradeSide, meetsThreshold, type Card } from '../src/lib/card.ts';
+import { buildCard, detailsSentence, gradeSide, meetsThreshold, STARS, tierLabel, tierOf, TIERS, type Card, type Tier } from '../src/lib/card.ts';
 import { buildSite, crossCheckAmendment6, crossCheckValueCalls, valueCallStats } from '../src/lib/data.ts';
 import { kickoffEt, pct, primetime, signed1, tierText, woeHeadline, woeShort } from '../src/lib/format.ts';
 import { live, sched } from './fixtures.ts';
@@ -154,11 +154,19 @@ describe('Vegas expected (site-side sum, used to cross-check the export)', () =>
   });
 });
 
-describe('tiers and toss-ups (Amendment 6)', () => {
+describe('tiers (Amendment 7) and toss-ups (Amendment 6)', () => {
   it("the value call carries the exporter's tier; the pick never does", () => {
-    const c = buildCard(sched(), live({ model_home_prob: 0.64, vegas_implied_home_prob: 0.74, value_tier: 2, bet: true, bet_side: 'away' }), T, NOW);
-    expect(c.valueCall).toMatchObject({ team: 'DEN', tier: 2 });
+    const c = buildCard(sched(), live({ model_home_prob: 0.64, vegas_implied_home_prob: 0.74, value_tier: 'lean', bet: true, bet_side: 'away' }), T, NOW);
+    expect(c.valueCall).toMatchObject({ team: 'DEN', tier: 'lean' });
     expect(c.pick).not.toHaveProperty('tier');
+  });
+  it('tierOf: Lean below 0.11, one-star from exactly 0.11, two-star from exactly 0.16 (10-decimal rounding)', () => {
+    const t = (e: number) => tierOf(e, 0.11, 0.16);
+    expect([t(0.04), t(0.1099), t(0.10999999)]).toEqual(['lean', 'lean', 'lean']);
+    expect([t(0.11), t(0.61 - 0.5), t(0.1599), t(0.15999999)]).toEqual(['one_star', 'one_star', 'one_star', 'one_star']);
+    expect([t(0.16), t(0.86 - 0.7), t(0.25)]).toEqual(['two_star', 'two_star', 'two_star']);
+    expect([STARS.lean, STARS.one_star, STARS.two_star]).toEqual(['', '★', '★★']);
+    expect(TIERS.map(tierLabel)).toEqual(['smaller-edge value call', 'one-star value call', 'two-star value call']);
   });
   it("toss-up comes from the exporter's flag, and only on a card with a pick", () => {
     expect(buildCard(sched(), live({ model_home_prob: 0.53, toss_up: true }), T, NOW).tossUp).toBe(true);
@@ -170,35 +178,48 @@ describe('tiers and toss-ups (Amendment 6)', () => {
     expect(c.pick?.team).toBe('KC');
   });
 
-  it('the real export passes the cross-check, with both tiers and toss-ups present', () => {
+  it('the real export passes the cross-check, with all three tiers and toss-ups present', () => {
     const d = loadReal();
     const site = buildSite(d);
     const cards = [...site.pages.values()].flatMap((p) => p.cards);
     expect(() => crossCheckAmendment6(d, cards)).not.toThrow();
-    expect(cards.some((c) => c.valueCall?.tier === 1)).toBe(true);
-    expect(cards.some((c) => c.valueCall?.tier === 2)).toBe(true);
+    for (const t of TIERS) expect(cards.some((c) => c.valueCall?.tier === t), t).toBe(true);
+    expect(cards.every((c) => !c.valueCall || TIERS.includes(c.valueCall.tier!))).toBe(true);
     expect(cards.some((c) => c.tossUp)).toBe(true);
     const v = site.record.valueCalls;
+    expect(v.tiers.map((t) => t.tier)).toEqual(['lean', 'one_star', 'two_star']);
     expect(v.tiers.map((t) => t.n).reduce((a, b) => a + b)).toBe(v.w + v.l);
+    expect(v.tiers.map((t) => t.woe).reduce((a, b) => a + b)).toBeCloseTo(v.woe, 3);
   });
 
   it('fails the build when the export and the cards disagree', () => {
     const d = loadReal();
     const cards = [...buildSite(d).pages.values()].flatMap((p) => p.cards);
     const L = d.live_2026;
-    const bump = (key: 'one_star' | 'two_star' | 'all', f: 'wins' | 'calls_logged' | 'vegas_expected', by: number) => ({
+    const bump = (key: 'lean' | 'one_star' | 'two_star' | 'all', f: 'wins' | 'calls_logged' | 'vegas_expected' | 'woe', by: number) => ({
       ...d, live_2026: { ...L, value_woe: { ...L.value_woe, [key]: { ...L.value_woe[key], [f]: L.value_woe[key][f] + by } } },
     });
     expect(() => crossCheckAmendment6(bump('two_star', 'wins', 1), cards)).toThrow(/two_star/);
     expect(() => crossCheckAmendment6(bump('one_star', 'calls_logged', 1), cards)).toThrow(/one_star/);
+    expect(() => crossCheckAmendment6(bump('lean', 'wins', 1), cards)).toThrow(/lean/);
+    expect(() => crossCheckAmendment6(bump('lean', 'woe', 0.01), cards)).toThrow(/tiers' woe/);
     expect(() => crossCheckAmendment6(bump('all', 'vegas_expected', 0.5), cards)).toThrow(/Vegas expected/);
     const conf = L.prediction_quality_by_confidence;
     const badConf = { ...d, live_2026: { ...L, prediction_quality_by_confidence: { ...conf, toss_up: { ...conf.toss_up, games_logged: conf.toss_up.games_logged + 1 } } } };
     expect(() => crossCheckAmendment6(badConf, cards)).toThrow(/toss_up picks/);
-    // a tier flipped on one card, far from the cutoff, is caught by the 4 dp recomputation
-    const i = cards.findIndex((c) => c.valueCall && Math.abs(c.valueCall.modelProb - c.valueCall.vegasProb - 0.08) > 0.01);
-    const flipped = cards.map((c, j) => (j === i ? { ...c, valueCall: { ...c.valueCall!, tier: (3 - c.valueCall!.tier!) as 1 | 2 } } : c));
-    expect(() => crossCheckAmendment6(d, flipped)).toThrow(cards[i]!.gameId);
+    // a tier changed on one card, far from both cutoffs, is caught by the 4 dp recomputation
+    // (each counts check fails too, so look for the per-game message specifically)
+    const far = (c: Card) => {
+      const e = c.valueCall!.modelProb - c.valueCall!.vegasProb;
+      return Math.abs(e - 0.11) > 0.01 && Math.abs(e - 0.16) > 0.01;
+    };
+    for (const from of TIERS) {
+      const i = cards.findIndex((c) => c.valueCall?.tier === from && far(c));
+      expect(i, from).toBeGreaterThanOrEqual(0);
+      const to = from === 'lean' ? 'two_star' : 'lean';
+      const flipped = cards.map((c, j) => (j === i ? { ...c, valueCall: { ...c.valueCall!, tier: to as Tier } } : c));
+      expect(() => crossCheckAmendment6(d, flipped)).toThrow(`${cards[i]!.gameId}: tier ${to}`);
+    }
     // a toss-up flag flipped on a lopsided game is caught too
     const k = cards.findIndex((c) => c.probs && Math.max(c.probs.modelHome, 1 - c.probs.modelHome) > 0.6);
     const flippedToss = cards.map((c, j) => (j === k ? { ...c, tossUp: true } : c));
@@ -228,6 +249,17 @@ describe('details sentence', () => {
   it('names the value-call team as underrated', () => {
     const c = buildCard(sched({ away: 'CHI' }), live({ away: 'CHI', model_home_prob: 0.51, vegas_implied_home_prob: 0.66 }), T, NOW);
     expect(detailsSentence(c, p)).toBe('Model gives CHI 49%, Vegas 34% — the model thinks CHI is underrated.');
+  });
+  it('a lean-tier value call: slight value (it has no card chip, so this sentence is where it shows)', () => {
+    const c = buildCard(sched({ away: 'CHI' }), live({ away: 'CHI', model_home_prob: 0.51, vegas_implied_home_prob: 0.56, value_tier: 'lean', bet: true, bet_side: 'away' }), T, NOW);
+    expect(c.valueCall).toMatchObject({ team: 'CHI', tier: 'lean' });
+    expect(detailsSentence(c, p)).toBe('Model gives CHI 49%, Vegas 44% — the model sees slight value on CHI.');
+  });
+  it('starred value calls keep the underrated sentence', () => {
+    for (const tier of ['one_star', 'two_star'] as const) {
+      const c = buildCard(sched({ away: 'CHI' }), live({ away: 'CHI', model_home_prob: 0.51, vegas_implied_home_prob: 0.66, value_tier: tier, bet: true, bet_side: 'away' }), T, NOW);
+      expect(detailsSentence(c, p), tier).toBe('Model gives CHI 49%, Vegas 34% — the model thinks CHI is underrated.');
+    }
   });
   it('under the threshold: close to the market', () => {
     const c = buildCard(sched(), live({ model_home_prob: 0.62, vegas_implied_home_prob: 0.6 }), T, NOW);

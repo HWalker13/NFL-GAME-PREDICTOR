@@ -11,8 +11,16 @@ export type Grade = 'win' | 'loss' | 'push' | 'open';
 
 export type Side = 'home' | 'away';
 
-/** Value-call tier (Amendment 6, display only): 1 = ★ (edge 4 to 8 points), 2 = ★★ (8 points or more). */
-export type Tier = 1 | 2;
+/**
+ * Value-call tier (Amendment 7, display only), on the call's own edge: 'lean' = 4 to 11 points,
+ * 'one_star' = ★, 11 to 16 points, 'two_star' = ★★, 16 points or more. A lean-tier call is still an
+ * official value call; the site shows it only in the details sentence and the header's "Smaller
+ * edges" row, never as a card chip, and never with the word "Lean".
+ */
+export type Tier = 'lean' | 'one_star' | 'two_star';
+
+/** Display order, lowest tier first. */
+export const TIERS: readonly Tier[] = ['lean', 'one_star', 'two_star'];
 
 export interface TeamRow {
   abbr: string;
@@ -147,8 +155,21 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
   };
 }
 
-/** Accessible name for a tier's stars. */
-export const tierLabel = (t: Tier): string => (t === 2 ? 'two-star value call' : 'one-star value call');
+/** Visible stars for a tier; the lean tier has none (and no card chip). */
+export const STARS: Record<Tier, string> = { lean: '', one_star: '★', two_star: '★★' };
+
+/** Accessible name for a tier (the stars are hidden from screen readers). */
+export const tierLabel = (t: Tier): string =>
+  ({ lean: 'smaller-edge value call', one_star: 'one-star value call', two_star: 'two-star value call' })[t];
+
+/**
+ * The tier for an edge, given the cutoffs; same 10-decimal comparison as the exporter. Only for the
+ * build's cross-check against 4 dp probabilities. The exporter's full-precision tier is what renders.
+ */
+export function tierOf(edge: number, oneStar: number, twoStar: number): Tier {
+  if (meetsThreshold(edge, twoStar)) return 'two_star';
+  return meetsThreshold(edge, oneStar) ? 'one_star' : 'lean';
+}
 
 /** The plain-English line under the details bars. */
 export function detailsSentence(c: Card, p: (x: number) => string): string | null {
@@ -157,6 +178,8 @@ export function detailsSentence(c: Card, p: (x: number) => string): string | nul
   if (vegasHome === null) return `Model gives ${c.pick.team} ${p(c.pick.modelProb)}. No Vegas odds were saved for this game.`;
   if (c.valueCall) {
     const v = c.valueCall;
+    // A lean-tier call has no chip on the card; this sentence is where it shows (display note, 2026-11-17).
+    if (v.tier === 'lean') return `Model gives ${v.team} ${p(v.modelProb)}, Vegas ${p(v.vegasProb)} — the model sees slight value on ${v.team}.`;
     return `Model gives ${v.team} ${p(v.modelProb)}, Vegas ${p(v.vegasProb)} — the model thinks ${v.team} is underrated.`;
   }
   // Under the threshold: describe the side the model likes a bit more than Vegas does.

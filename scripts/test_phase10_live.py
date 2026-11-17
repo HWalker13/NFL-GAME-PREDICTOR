@@ -629,24 +629,39 @@ class TestScorecard(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------- #
-# Amendment 6: value tiers, toss-ups, wins over expected (display only)
+# Amendments 6 and 7: value tiers, toss-ups, wins over expected (display only)
 # --------------------------------------------------------------------------- #
 class TestAmendment6(unittest.TestCase):
     def test_value_tier_boundaries(self):
+        # Amendment 7: Lean = [0.04, 0.11), one-star = [0.11, 0.16), two-star = 0.16 and above.
         self.assertIsNone(C.value_tier(0.0399))
         self.assertIsNone(C.value_tier(np.nan))
-        self.assertEqual(C.value_tier(0.04), 1)
-        self.assertEqual(C.value_tier(0.57 - 0.53), 1)            # 0.03999999999999992 in floats
-        self.assertEqual(C.value_tier(0.0799), 1)                 # just below 0.08
-        self.assertEqual(C.value_tier(0.07999999), 1)
-        self.assertEqual(C.value_tier(0.08), 2)                   # exactly 0.08 is two-star
-        self.assertEqual(C.value_tier(0.58 - 0.50), 2)            # 0.07999999999999996 in floats
-        self.assertEqual(C.value_tier(0.25), 2)
+        self.assertEqual(C.value_tier(0.04), "lean")
+        self.assertEqual(C.value_tier(0.57 - 0.53), "lean")       # 0.03999999999999992 in floats
+        self.assertEqual(C.value_tier(0.08), "lean")              # Amendment 6's old cutoff: now a Lean
+        self.assertEqual(C.value_tier(0.1099), "lean")            # just below 0.11
+        self.assertEqual(C.value_tier(0.10999999), "lean")
+        self.assertEqual(C.value_tier(0.11), "one_star")          # exactly 0.11 is one-star
+        self.assertEqual(C.value_tier(0.61 - 0.50), "one_star")   # 0.10999999999999999 in floats
+        self.assertEqual(C.value_tier(0.1599), "one_star")        # just below 0.16
+        self.assertEqual(C.value_tier(0.15999999), "one_star")
+        self.assertEqual(C.value_tier(0.16), "two_star")          # exactly 0.16 is two-star
+        self.assertEqual(C.value_tier(0.66 - 0.50), "two_star")   # 0.16000000000000003 in floats
+        self.assertEqual(C.value_tier(0.86 - 0.70), "two_star")   # 0.15999999999999992 in floats
+        self.assertEqual(C.value_tier(0.25), "two_star")
+        self.assertEqual((C.VALUE_TIER_1_EDGE, C.VALUE_TIER_2_EDGE), (0.11, 0.16))
 
-    def test_value_tier_agrees_with_section3_buckets(self):
-        for e in np.round(np.arange(0.0, 0.2, 0.00005), 6).tolist() + [0.58 - 0.50, 0.36 - 0.30, 0.57 - 0.53]:
-            self.assertEqual(C.value_tier(e), S.TIER_OF_BUCKET.get(S.edge_bucket(e)), e)
-        self.assertEqual(C.VALUE_TIER_2_EDGE, S.EDGE_BUCKETS[-1][0])
+    def test_value_tier_partitions_qualifying_edges(self):
+        # Every edge the bet rule accepts gets exactly one tier, and no other edge gets one;
+        # the tiers are contiguous and ordered (an independent interval lookup).
+        cuts = ((C.EDGE_THRESHOLD, "lean"), (C.VALUE_TIER_1_EDGE, "one_star"), (C.VALUE_TIER_2_EDGE, "two_star"))
+        for e in np.round(np.arange(-0.1, 0.3, 0.00005), 6).tolist():
+            want = None
+            for lo, name in cuts:
+                if round(e, C.EDGE_DECIMALS) >= lo:
+                    want = name
+            self.assertEqual(C.value_tier(e), want, e)
+            self.assertEqual(C.value_tier(e) is not None, C.edge_qualifies(e), e)
 
     def test_toss_up_boundaries(self):
         self.assertTrue(C.is_toss_up(0.55))                       # exactly 0.55: toss-up (inclusive)
@@ -676,10 +691,11 @@ class TestAmendment6(unittest.TestCase):
         self.assertEqual(C.side_edge("away", -0.09, 0.09), 0.09)
 
     def _calls(self):
-        # four official champion calls: home 0.05 win, away 0.09 loss, home 0.08 void, home 0.06 win;
-        # plus a challenger (hypothetical) call and a no-bet row that must be ignored.
-        rows = [("home", 0.05, 0.50, "win"), ("away", -0.09, 0.40, "loss"), ("home", 0.08, 0.60, "void"),
-                ("home", 0.06, 0.30, "win")]
+        # five official champion calls: home 0.05 win (Lean), away 0.17 loss (two-star), home 0.16 void
+        # (two-star), home 0.11 win (one-star), away 0.1099 loss (Lean); plus a challenger (hypothetical)
+        # call and a no-bet row that must be ignored.
+        rows = [("home", 0.05, 0.50, "win"), ("away", -0.17, 0.40, "loss"), ("home", 0.16, 0.60, "void"),
+                ("home", 0.11, 0.30, "win"), ("away", -0.1099, 0.80, "loss")]
         df = pd.DataFrame([dict(model="champion", game_id=f"g{i}", paper_bet=s, edge_home=e, edge_away=-e,
                                 implied_p_home=imp, bet_outcome=o, bet_status="official")
                            for i, (s, e, imp, o) in enumerate(rows)])
@@ -691,23 +707,33 @@ class TestAmendment6(unittest.TestCase):
 
     def test_value_woe_rows_per_tier_sum_to_all(self):
         r = S.value_woe_rows(self._calls())
-        self.assertEqual((r["all"]["calls"], r[1]["calls"], r[2]["calls"]), (4, 2, 2))
-        self.assertEqual((r[1]["wins"], r[1]["losses"], r[2]["losses"], r[2]["pushes"]), (2, 0, 1, 1))
-        self.assertEqual((r["all"]["n"], r[1]["n"], r[2]["n"]), (3, 2, 1))       # the push is excluded
-        # vegas expected: home 0.50, home 0.30 (tier 1); away side of 0.40 = 0.60 (tier 2)
-        self.assertAlmostEqual(r[1]["vegas_expected"], 0.80)
-        self.assertAlmostEqual(r[2]["vegas_expected"], 0.60)
-        self.assertAlmostEqual(r["all"]["woe"], 2 - 1.40)
-        self.assertAlmostEqual(r[1]["woe"] + r[2]["woe"], r["all"]["woe"])
-        self.assertAlmostEqual(r["all"]["model_expected"], 0.05 + 0.09 + 0.06)
+        self.assertEqual(list(r), ["all", "lean", "one_star", "two_star"])
+        self.assertEqual([r[k]["calls"] for k in r], [5, 2, 1, 2])
+        self.assertEqual((r["lean"]["wins"], r["lean"]["losses"]), (1, 1))
+        self.assertEqual((r["one_star"]["wins"], r["one_star"]["losses"]), (1, 0))
+        self.assertEqual((r["two_star"]["losses"], r["two_star"]["pushes"]), (1, 1))
+        self.assertEqual([r[k]["n"] for k in r], [4, 2, 1, 1])                   # the push is excluded
+        # vegas expected: Lean home 0.50 + away side of 0.80 = 0.20; one-star home 0.30;
+        # two-star away side of 0.40 = 0.60
+        self.assertAlmostEqual(r["lean"]["vegas_expected"], 0.70)
+        self.assertAlmostEqual(r["one_star"]["vegas_expected"], 0.30)
+        self.assertAlmostEqual(r["two_star"]["vegas_expected"], 0.60)
+        self.assertAlmostEqual(r["all"]["woe"], 2 - 1.60)
+        for f in ("calls", "wins", "losses", "pushes", "pending", "n", "won"):
+            self.assertEqual(sum(r[k][f] for k in C.VALUE_TIERS), r["all"][f], f)
+        for f in ("vegas_expected", "model_expected", "woe"):
+            self.assertAlmostEqual(sum(r[k][f] for k in C.VALUE_TIERS), r["all"][f], msg=f)
+        self.assertAlmostEqual(r["all"]["model_expected"], 0.05 + 0.17 + 0.11 + 0.1099)
         t = S.value_woe_table(self._calls())
-        self.assertIn("| ★★ edge [0.08+) | 2 | 0-1 (1, 0) | 1 | 0 | 0.600 | 0.090 | -0.600 | -0.6000 | +0.0900 |", t)
+        self.assertIn("| Lean edge [0.04, 0.11) | 2 | 1-1 (0, 0) | 2 | 1 | 0.700 | 0.160 | +0.300 | +0.1500 | +0.0799 |", t)   # (0.05 + 0.1099) / 2
+        self.assertIn("| ★ edge [0.11, 0.16) | 1 | 1-0 (0, 0) | 1 | 1 | 0.300 | 0.110 | +0.700 | +0.7000 | +0.1100 |", t)
+        self.assertIn("| ★★ edge [0.16+) | 2 | 0-1 (1, 0) | 1 | 0 | 0.600 | 0.170 | -0.600 | -0.6000 | +0.1700 |", t)
 
-    def test_tier_disagreeing_with_bucket_refuses(self):
+    def test_official_call_without_tier_refuses(self):
         df = self._calls()
-        with unittest.mock.patch.object(C, "VALUE_TIER_2_EDGE", 0.06):   # the 0.06 call would turn two-star
-            with self.assertRaises(ValueError):
-                S.official_value_calls(df)
+        df.loc[0, "edge_home"] = 0.03   # an "official" call below the bet threshold has no tier
+        with self.assertRaises(ValueError):
+            S.official_value_calls(df)
 
     def test_confidence_rows(self):
         df = pd.DataFrame([dict(model="champion", p_home=p, result=r, correct=c) for p, r, c in (

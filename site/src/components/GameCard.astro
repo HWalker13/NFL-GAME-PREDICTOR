@@ -1,6 +1,6 @@
 ---
 import { kickoffEt, pct } from '../lib/format.ts';
-import { detailsSentence, tierLabel, type Card, type CardStatus, type Call, type Grade, type TeamRow, type Tier } from '../lib/card.ts';
+import { detailsSentence, STARS, tierLabel, type Card, type CardStatus, type Call, type Grade, type TeamRow } from '../lib/card.ts';
 
 interface Props {
   card: Card;
@@ -21,10 +21,19 @@ const GRADE: Record<Grade, { sr: string; shown: string | null; icon: 'check' | '
 };
 const rows: TeamRow[] = [card.away, card.home];
 const p = (x: number): string => pct(x, card.decimals);
-const chips: { label: string; call: Call; tier: Tier | null }[] = [];
-if (card.pick) chips.push({ label: 'Pick', call: card.pick, tier: null });
-if (card.valueCall) chips.push({ label: 'Value call', call: card.valueCall, tier: card.valueCall.tier });
-const STARS: Record<Tier, string> = { 1: '★', 2: '★★' };
+/*
+  Chips: "Pick: TEAM" always; a value call gets a chip only when starred: "Value call ★: TEAM" /
+  "Value call ★★: TEAM" (Amendment 7). A lean-tier value call is still an official value call, but
+  it is shown only in the details sentence (display note, 2026-11-17). Every chip keeps its ✓/✗/push
+  icon and screen-reader word.
+*/
+interface Chip { label: string; call: Call; stars: string | null; srTier: string | null }
+const chips: Chip[] = [];
+if (card.pick) chips.push({ label: 'Pick', call: card.pick, stars: null, srTier: null });
+const t = card.valueCall?.tier ?? null;
+if (card.valueCall && t !== 'lean') {
+  chips.push({ label: 'Value call', call: card.valueCall, stars: t ? STARS[t] : null, srTier: t ? tierLabel(t) : null });
+}
 // A tied game isn't a push for the straight-up pick; it just reads "Tie".
 const shownWord = (label: string, g: Grade): string | null => (g === 'push' && label === 'Pick' ? 'Tie' : GRADE[g].shown);
 const sentence = detailsSentence(card, p);
@@ -57,7 +66,7 @@ const bars = card.probs
 
   {chips.length > 0 && (
     <ul class="chips">
-      {chips.map(({ label, call, tier }) => (
+      {chips.map(({ label, call, stars, srTier }) => (
         <li class:list={['chip', call.grade]}>
           {GRADE[call.grade].icon === 'check' && (
             <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
@@ -68,8 +77,8 @@ const bars = card.probs
           {GRADE[call.grade].icon === 'dash' && (
             <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="M4 8h8" /></svg>
           )}
-          {tier ? (
-            <span><span aria-hidden="true">{label} <span class="stars">{STARS[tier]}</span></span><span class="sr">{tierLabel(tier)}</span>: <strong>{call.team}</strong></span>
+          {stars ? (
+            <span><span aria-hidden="true">{label} <span class="stars">{stars}</span></span><span class="sr">{srTier}</span>: <strong>{call.team}</strong></span>
           ) : (
             <span>{label}: <strong>{call.team}</strong></span>
           )}

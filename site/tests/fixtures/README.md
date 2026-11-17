@@ -1,36 +1,54 @@
 # Test fixture: the 2026-11-12 site export
 
-`site_data_2026-11-12.json` (sha256 `b63cce3b…73dbf`, 666,001 bytes) is a frozen copy of
-the site export as of the 2026-11-12T21:09:40Z schedule snapshot: current week 10, scores
+`site_data_2026-11-12.json` (sha256 `2cda464a…40d1b1`, 666,854 bytes, schema 1.4.0) is a frozen
+copy of the site export as of the 2026-11-12T21:09:40Z schedule snapshot: current week 10, scores
 through week 9, week 10 picks logged but not played, week 11 onward in the future.
 
 Every exact-value assertion in `site/tests/` (records like "Picks 44–31 59%", banners, week 10
-as the current week, NE at DET's 49.6%, the snapshot time) reads this file through
-`loadFixture()` / `buildOnce('fixture')` in `tests/exports.ts`. Tests against the real
-`exports/site_data.json` check only invariants that hold every week. Never edit or regenerate
-this file to make a test pass; it is the fixed input those assertions were written against.
+as the current week, NE at DET's 49.6%, the snapshot time, the Lean / ★ / ★★ tier rows) reads
+this file through `loadFixture()` / `buildOnce('fixture')` in `tests/exports.ts`. Tests against
+the real `exports/site_data.json` check only invariants that hold every week. Never edit or
+regenerate this file to make a test pass; it is the fixed input those assertions were written
+against. Regenerate it only when the schema changes, by the recipe below, and check the diff.
 
-## Why it is regenerated, not copied from git
+## Recipe (regenerated 2026-11-17 for schema 1.4.0, Amendment 7)
 
-The only committed export as of 2026-11-12 is `1a3fac7:exports/site_data.json`, which is
-schema 1.2.0. The site now requires 1.3.0 (Amendment 6: `value_tier`, `toss_up`,
-`value_woe`, …), so that file no longer parses, and the tests' tier and toss-up values were
-written against a 1.3.0 export that was never committed.
+The game data is the repo at commit `c9f2354` (Amendment 6), the last commit whose `data/live/`
+is the 2026-11-12 state (weeks 3–9 graded, week 10 predicted). No Python code changed between
+`c9f2354` and the Amendment 7 commit `637de78` except the new `audit/scripts/edge_tiers.py`, so
+the 1.4.0 code applies to it cleanly.
 
-This file was produced by the schema-1.3.0 exporter at commit `c9f2354` (Amendment 6), run in a
-throwaway git worktree with the two later schedule snapshots
-(`schedules_2026_20261115T145029Z.parquet`, `schedules_2026_20261115T202714Z.parquet`)
-removed, so the 2026-11-12 snapshot is the latest input. `source_commit` records this
-honestly (`dirty: true`, `dirty_paths` = those two files), which is why the fixture build
-runs with `NFL_ALLOW_DIRTY=1`. `generated_at` was pinned to the snapshot time.
+1. `git worktree add --detach <scratch>/wt c9f2354` (a throwaway worktree outside the repo).
+2. Copy the schema-1.4.0 versions of `scripts/live/common.py`, `scripts/live/scorecard.py`,
+   `scripts/export_site_data.py` and `exports/SCHEMA.md` from the Amendment 7 Stage 2 working
+   tree into the worktree.
+3. Delete the two later schedule snapshots
+   (`schedules_2026_20261115T145029Z.parquet`, `schedules_2026_20261115T202714Z.parquet`) from
+   the worktree, so the 2026-11-12 snapshot is the latest input.
+4. Copy the gitignored inputs the exporter reads from the main checkout into the worktree:
+   everything under `data/processed/`, and `data/raw/schedules_{2023,2024,2025}.parquet`.
+5. In the worktree, render the scorecard from the official graded files at `c9f2354` with the
+   1.4.0 `scorecard` functions (`load_graded` / `build_markdown` on `data/live`) into a scratch
+   file, then run the exporter with `SCORECARD_PATH` pointed at that scratch file and
+   `--generated-at 2026-11-12T21:09:40Z` (the snapshot time), writing to scratch. The committed
+   scorecard at `c9f2354` has Amendment 6's two tier rows, so it can't be the cross-check
+   target. Every exporter cross-check passed, including the one against `audit/out/metrics.json`.
+6. Copy the output here and remove the worktree.
 
-The exporter's scorecard cross-check target was regenerated from the official graded files at
-`c9f2354` into a scratch file (the committed scorecard at that commit predates its Amendment
-6 sections). Nothing under `data/live/`, `docs/live/` or `exports/` was written. Every other
-exporter cross-check passed unchanged.
+Nothing under `data/live/`, `docs/live/` or `exports/` in the main checkout was written.
 
-Check: compared with `1a3fac7:exports/site_data.json`, every field the two share is identical
-except `schema_version`, `generated_at` and `source_commit`. The only other differences are the
-1.3.0 additions (`games[].toss_up`, `games[].value_tier`, `live_2026.amendment_6_note`,
-`prediction_quality_by_confidence`, `toss_up_threshold`, `value_tier_two_star_edge`,
-`value_woe`).
+`source_commit` records this honestly: `hash` = `c9f2354…`, `dirty: true`, and `dirty_paths` =
+the two deleted snapshots plus the three overlaid code files. That is why the fixture build
+runs with `NFL_ALLOW_DIRTY=1`.
+
+## Check
+
+Compared with the previous (schema 1.3.0) fixture, sha256 `b63cce3b…73dbf`, every field the two
+share is identical except these:
+- `schema_version`, `source_commit.dirty_paths`, `live_2026.amendment_6_note`;
+- the Amendment 7 tier fields: 58 per-game `games[].value_tier` values,
+  `live_2026.value_tier_two_star_edge` (0.08 → 0.16), and `value_woe.one_star` / `value_woe.two_star`;
+- the additions `live_2026.value_tier_one_star_edge` and `live_2026.value_woe.lean`.
+
+`value_woe.all` and the official record (28–24–1, 5 pending) are unchanged. The new tier
+counts are Lean 38, ★ 12, ★★ 8 (58 calls logged).

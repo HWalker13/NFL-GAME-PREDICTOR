@@ -302,24 +302,31 @@ def paper_bet(p_home: float, home_ml: float, away_ml: float,
 
 
 # --------------------------------------------------------------------------- #
-# Display-only views (Amendment 6). None of these changes a bet, a grade or a
-# verdict: the tiers label the bets paper_bet already placed, the toss-up flag
-# labels picks, and WOE is a descriptive sum.
+# Display-only views (Amendments 6 and 7). None of these changes a bet, a grade
+# or a verdict: the tiers label the bets paper_bet already placed, the toss-up
+# flag labels picks, and WOE is a descriptive sum.
 # --------------------------------------------------------------------------- #
-# ★★ cutoff = the prereg Section 3 [0.08+) edge-bucket boundary (scorecard.EDGE_BUCKETS).
-VALUE_TIER_2_EDGE = 0.08
+# Amendment 7 tiers (supersede Amendment 6's two tiers), on the value call's own edge:
+# Lean = [EDGE_THRESHOLD, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above.
+VALUE_TIER_1_EDGE = 0.11
+VALUE_TIER_2_EDGE = 0.16
+VALUE_TIERS = ("lean", "one_star", "two_star")
 # Toss-up: the favorite's probability is at most this (the two sides within 10 points).
 TOSS_UP_MAX_FAV = 0.55
 
 
-def value_tier(edge: float) -> int | None:
-    """1 (★, edge in [0.04, 0.08)) or 2 (★★, edge >= 0.08) for a value call's
-    own edge; None if the edge does not qualify (or is NaN). Compared at
-    EDGE_DECIMALS, exactly like ``edge_qualifies``, so an edge of exactly 0.08
-    on paper is ★★."""
+def value_tier(edge: float) -> str | None:
+    """"lean" (edge in [0.04, 0.11)), "one_star" (★, [0.11, 0.16)) or "two_star"
+    (★★, >= 0.16) for a value call's own edge; None if the edge does not
+    qualify (or is NaN). Compared at EDGE_DECIMALS, exactly like
+    ``edge_qualifies``, so an edge of exactly 0.11 on paper is ★ and exactly
+    0.16 is ★★ (Amendment 7)."""
     if pd.isna(edge) or not edge_qualifies(edge):
         return None
-    return 2 if round(float(edge), EDGE_DECIMALS) >= VALUE_TIER_2_EDGE else 1
+    e = round(float(edge), EDGE_DECIMALS)
+    if e >= VALUE_TIER_2_EDGE:
+        return "two_star"
+    return "one_star" if e >= VALUE_TIER_1_EDGE else "lean"
 
 
 def is_toss_up(p_home: float) -> bool:

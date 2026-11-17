@@ -54,7 +54,7 @@ from scripts.live import common as C
 from scripts.live import scorecard as SC
 
 ROOT = C.PROJECT_ROOT
-SCHEMA_VERSION = "1.3.0"
+SCHEMA_VERSION = "1.4.0"
 EXPORT_DIR = ROOT / "exports"
 OUT_PATH = EXPORT_DIR / "site_data.json"
 METRICS_PATH = ROOT / "audit" / "out" / "metrics.json"
@@ -627,7 +627,7 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
             "prediction_committed_at_kind": "local git author timestamp (not proof of push time)",
         })
 
-    # ---- Amendment 6 (descriptive only): tiers, WOE, toss-ups ------------------
+    # ---- Amendments 6 and 7 (descriptive only): tiers, WOE, toss-ups ----------
     value_woe = amendment6_value_woe(graded, champ_pred)
     by_conf = amendment6_confidence(graded, champ_pred)
 
@@ -637,13 +637,14 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
         "as_of_utc": C.iso(as_of), "as_of_source": f"latest schedule snapshot {snap.name}",
         "first_official_week": FIRST_OFFICIAL_WEEK,
         "edge_threshold": C.EDGE_THRESHOLD,
+        "value_tier_one_star_edge": C.VALUE_TIER_1_EDGE,
         "value_tier_two_star_edge": C.VALUE_TIER_2_EDGE,
         "toss_up_threshold": C.TOSS_UP_MAX_FAV,
         "value_woe": value_woe,
         "prediction_quality_by_confidence": by_conf,
         "amendment_6_note": "Value tiers, wins over expected and the toss-up flag are descriptive only "
-                            "(docs/PHASE10_PREREG.md Amendment 6). They change no bet, grade or verdict; "
-                            "the season-end verdict rests on CLV alone.",
+                            "(docs/PHASE10_PREREG.md Amendments 6 and 7). They change no bet, grade or "
+                            "verdict; the season-end verdict rests on CLV alone.",
         "games_logged": int(len(champ_pred)), "games_graded": int(len(champ_all)),
         "games_decided": int(SC.decided(champ_all).shape[0]),
         "ties": int((champ_all["result"] == "tie").sum()),
@@ -662,9 +663,6 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
     return block, games
 
 
-TIER_KEY = {"all": "all", 1: "one_star", 2: "two_star"}
-
-
 def amendment6_value_woe(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict:
     """Per tier: the scorecard's own value_woe_rows (graded files) plus ``calls_logged``,
     the official value calls in the prediction files (pending ones included)."""
@@ -675,7 +673,7 @@ def amendment6_value_woe(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict
     out = {}
     for key, r in rows.items():
         n_logged = len(tiers) if key == "all" else sum(t == key for t in tiers)
-        out[TIER_KEY[key]] = {
+        out[key] = {
             "calls_logged": int(n_logged), "calls_graded": r["calls"], "wins": r["wins"], "losses": r["losses"],
             "pushes": r["pushes"], "n": r["n"], "won": r["won"], "vegas_expected": r["vegas_expected"],
             "model_expected": r["model_expected"], "woe": r["woe"], "woe_per_call": r["woe_per_call"],
@@ -744,7 +742,7 @@ def parse_scorecard(text: str) -> dict:
             out["bets"][cells[0]] = {"bets": b, "wlvp": wl, "units": cells[3], "roi": roi, "clv": clv,
                                      "p": cells[6]}
         if len(cells) == 10 and cells[0] in SC.TIER_LABEL.values():
-            key = next(TIER_KEY[k] for k, lab in SC.TIER_LABEL.items() if lab == cells[0])
+            key = next(k for k, lab in SC.TIER_LABEL.items() if lab == cells[0])
             wl = re.match(r"(\d+)-(\d+) \((\d+), (\d+)\)", cells[2]).groups()
             out["value_woe"][key] = {"calls": cells[1], "wlpp": wl, "n": cells[3], "won": cells[4],
                                      "vegas_expected": cells[5], "model_expected": cells[6], "woe": cells[7],
@@ -822,7 +820,8 @@ def check_live(block: dict, graded: pd.DataFrame, predicted: dict, schedule: pd.
     if sc["checkpoint"]["nums"] != mine or sc["checkpoint"]["n"] != cp["paired_games"] \
             or sc["checkpoint"]["decision"] != cp["decision"]:
         errs.append(f"checkpoint: export {mine, cp['paired_games'], cp['decision']} vs scorecard {sc['checkpoint']}")
-    # 2b) Amendment 6: exported values == the scorecard's cells; tiers add up to the official record.
+    # 2b) Amendments 6/7: exported values == the scorecard's cells (every row present, no extra
+    #     rows); the three tiers add up to the overall figures and to the official record.
     vw = block["value_woe"]
     for key, b in vw.items():
         s = sc["value_woe"].get(key)
@@ -839,7 +838,9 @@ def check_live(block: dict, graded: pd.DataFrame, predicted: dict, schedule: pd.
         for k, v in mine.items():
             if s[k] != v:
                 errs.append(f"live value_woe {key} {k}: export {v} vs scorecard {s[k]}")
-    tiers = (vw["one_star"], vw["two_star"])
+    if set(vw) != set(SC.TIER_KEYS) or set(sc["value_woe"]) != set(SC.TIER_KEYS):
+        errs.append(f"value_woe keys {sorted(vw)} / scorecard rows {sorted(sc['value_woe'])} != {list(SC.TIER_KEYS)}")
+    tiers = tuple(vw[k] for k in C.VALUE_TIERS if k in vw)
     for f in ("calls_logged", "calls_graded", "wins", "losses", "pushes", "n", "won"):
         if sum(t[f] for t in tiers) != vw["all"][f]:
             errs.append(f"value_woe tiers' {f} do not sum to the overall {f}")

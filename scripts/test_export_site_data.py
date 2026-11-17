@@ -382,8 +382,9 @@ class Schedule2026(unittest.TestCase):
 
 
 class Amendment6(unittest.TestCase):
-    """Value tiers, wins over expected and toss-ups (display only): consistent with the official
-    record, with the per-game flags, and with the scorecard."""
+    """Value tiers (Amendment 7: Lean / one-star / two-star), wins over expected and toss-ups
+    (display only): consistent with the official record, with the per-game flags, and with the
+    scorecard."""
 
     @classmethod
     def setUpClass(cls):
@@ -393,15 +394,18 @@ class Amendment6(unittest.TestCase):
         cls.live = [g for g in cls.d["games"] if g["evaluation"] == "live_2026"]
 
     def test_constants_from_rule(self):
+        self.assertEqual(self.L["edge_threshold"], C.EDGE_THRESHOLD)
+        self.assertEqual(self.L["value_tier_one_star_edge"], C.VALUE_TIER_1_EDGE)
         self.assertEqual(self.L["value_tier_two_star_edge"], C.VALUE_TIER_2_EDGE)
-        self.assertEqual(self.L["value_tier_two_star_edge"], SC.EDGE_BUCKETS[-1][0])
+        self.assertEqual((self.L["value_tier_one_star_edge"], self.L["value_tier_two_star_edge"]), (0.11, 0.16))
         self.assertEqual(self.L["toss_up_threshold"], C.TOSS_UP_MAX_FAV)
-        self.assertEqual(self.d["schema_version"], "1.3.0")
+        self.assertEqual(self.d["schema_version"], "1.4.0")
+        self.assertEqual(list(self.vw), sorted(SC.TIER_KEYS))   # keys sorted in the JSON
 
     def test_tier_counts_sum_to_official(self):
-        one, two, a = self.vw["one_star"], self.vw["two_star"], self.vw["all"]
+        tiers, a = [self.vw[k] for k in C.VALUE_TIERS], self.vw["all"]
         for f in ("calls_logged", "calls_graded", "wins", "losses", "pushes", "n", "won"):
-            self.assertEqual(one[f] + two[f], a[f], f)
+            self.assertEqual(sum(t[f] for t in tiers), a[f], f)
         o = self.L["official_bets"]
         self.assertEqual((a["wins"], a["losses"], a["pushes"], a["calls_graded"]),
                          (o["wins"], o["losses"], o["voids"], o["bets"]))
@@ -409,17 +413,21 @@ class Amendment6(unittest.TestCase):
         self.assertEqual(a["n"], a["wins"] + a["losses"])
 
     def test_tier_woe_sums_to_overall(self):
-        one, two, a = self.vw["one_star"], self.vw["two_star"], self.vw["all"]
+        tiers, a = [self.vw[k] for k in C.VALUE_TIERS], self.vw["all"]
         for f in ("vegas_expected", "model_expected", "woe"):
-            self.assertAlmostEqual(one[f] + two[f], a[f], delta=2e-4, msg=f)   # three 4-dp roundings
-        for t in (one, two, a):
+            self.assertAlmostEqual(sum(t[f] for t in tiers), a[f], delta=2.5e-4, msg=f)   # four 4-dp roundings
+        # at full precision the tiers sum exactly (up to float addition)
+        full = SC.value_woe_rows(SC.load_graded(E.LIVE_ROOT, E.LIVE_SEASON))
+        for f in ("vegas_expected", "model_expected", "woe"):
+            self.assertAlmostEqual(sum(full[k][f] for k in C.VALUE_TIERS), full["all"][f], places=9, msg=f)
+        for t in tiers + [a]:
             self.assertAlmostEqual(t["woe"], t["won"] - t["vegas_expected"], delta=2e-4)
             if t["n"]:
                 self.assertAlmostEqual(t["woe_per_call"], t["woe"] / t["n"], delta=1e-4)
                 self.assertAlmostEqual(t["model_expected_per_call"], t["model_expected"] / t["n"], delta=1e-4)
 
     def test_per_game_flags(self):
-        tiers = {1: 0, 2: 0}
+        tiers = dict.fromkeys(C.VALUE_TIERS, 0)
         for g in self.live:
             with self.subTest(game=g["game_id"]):
                 self.assertEqual(g["value_tier"] is not None, g["bet"])
@@ -428,7 +436,7 @@ class Amendment6(unittest.TestCase):
                 p = g["model_home_prob"]   # 4 dp: only check games clear of the cutoff
                 if abs(max(p, 1 - p) - C.TOSS_UP_MAX_FAV) > 1e-4:
                     self.assertEqual(g["toss_up"], max(p, 1 - p) <= C.TOSS_UP_MAX_FAV)
-        self.assertEqual((tiers[1], tiers[2]), (self.vw["one_star"]["calls_logged"], self.vw["two_star"]["calls_logged"]))
+        self.assertEqual(tiers, {k: self.vw[k]["calls_logged"] for k in C.VALUE_TIERS})
 
     def test_per_game_flags_match_full_precision_sources(self):
         preds = E.load_live_predictions()
@@ -463,6 +471,18 @@ class Amendment6(unittest.TestCase):
         def bad(graded, champ_pred):
             out = orig(graded, champ_pred)
             out["two_star"] = dict(out["two_star"], woe=out["two_star"]["woe"] + 0.5)
+            return out
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / "out.json"
+            with mock.patch.object(E, "amendment6_value_woe", bad), mock.patch("sys.stderr"):
+                self.assertEqual(E.main(["--out", str(out)]), 2)
+            self.assertFalse(out.exists())
+
+    def test_refuses_on_missing_tier(self):
+        orig = E.amendment6_value_woe
+        def bad(graded, champ_pred):
+            out = orig(graded, champ_pred)
+            del out["lean"]
             return out
         with tempfile.TemporaryDirectory() as t:
             out = Path(t) / "out.json"
