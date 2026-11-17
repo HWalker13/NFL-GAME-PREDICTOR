@@ -1,6 +1,6 @@
 # 2026 shadow-mode scorecard
 
-_Generated 2026-11-17T21:23:09Z from 7 graded week file(s): 3, 4, 5, 6, 7, 8, 10. Paper trading only -- no real money.
+_Generated 2026-11-17T23:33:32Z from 7 graded week file(s): 3, 4, 5, 6, 7, 8, 10. Paper trading only -- no real money.
 Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged predictions are never edited._
 
 ## How to read this
@@ -66,13 +66,14 @@ Edge = model probability minus vig-free implied probability for the side bet, at
 
 ## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)
 
-Descriptive only (Amendment 6). Nothing here changes the paper-bet rule, the checkpoint or the season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge: ★ = [0.04, 0.08) (the two lower Section 3 buckets merged), ★★ = 0.08 and above. **WOE** (wins over expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each call's side, over graded calls with pushes excluded. **Model expected** = the sum of the calls' edges: the WOE the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or below; accuracy follows the usual convention (ties excluded).
+Descriptive only (Amendments 6 and 7). Nothing here changes the paper-bet rule, the checkpoint or the season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge (Amendment 7): Lean = [0.04, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above. A Lean is still an official value call. **WOE** (wins over expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each call's side, over graded calls with pushes excluded. **Model expected** = the sum of the calls' edges: the WOE the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or below; accuracy follows the usual convention (ties excluded).
 
 | Value calls | Logged | W-L (push, pending) | n (graded, no push) | Won | Vegas expected | Model expected | WOE | WOE per call | Model expected per call |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|
 | All official value calls | 58 | 29-28 (1, 0) | 57 | 29 | 26.721 | 5.937 | +2.279 | +0.0400 | +0.1042 |
-| ★ edge [0.04, 0.08) | 25 | 14-10 (1, 0) | 24 | 14 | 12.978 | 1.487 | +1.022 | +0.0426 | +0.0619 |
-| ★★ edge [0.08+) | 33 | 15-18 (0, 0) | 33 | 15 | 13.743 | 4.450 | +1.257 | +0.0381 | +0.1349 |
+| Lean edge [0.04, 0.11) | 38 | 18-19 (1, 0) | 37 | 18 | 18.341 | 2.738 | -0.341 | -0.0092 | +0.0740 |
+| ★ edge [0.11, 0.16) | 12 | 6-6 (0, 0) | 12 | 6 | 5.514 | 1.571 | +0.486 | +0.0405 | +0.1309 |
+| ★★ edge [0.16+) | 8 | 5-3 (0, 0) | 8 | 5 | 2.866 | 1.628 | +2.134 | +0.2667 | +0.2035 |
 
 | Champion picks | Logged | Accuracy [95% CI] |
 |---|---:|---|
