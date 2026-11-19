@@ -28,8 +28,12 @@ export interface WeekPage {
   info: WeekInfo;
   banner: string | null;
   cards: Card[];
-  /** Graded picks and value calls this week; null when nothing this week is graded yet. */
-  summary: { picks: Tally; valueCalls: Tally } | null;
+  /**
+   * Graded picks and starred (★/★★) value calls this week; null when nothing this week is graded yet.
+   * Lean-tier calls have no card chip, so the week line leaves them out (display note, 2026-11-19);
+   * valueCalls is null when the week has no graded starred call. The season header still counts all.
+   */
+  summary: { picks: Tally; valueCalls: Tally | null } | null;
 }
 
 export interface Tally {
@@ -200,13 +204,13 @@ export function buildSite(d: SiteData): Site {
     const games = byWeek.get(info.week) ?? [];
     const cards = games.map((g) => buildCard(g, live.get(g.game_id), L.edge_threshold, now));
     const picks = tally(cards.flatMap((c) => (c.pick ? [c.pick.grade] : [])));
-    const valueCalls = tally(cards.flatMap((c) => (c.valueCall ? [c.valueCall.grade] : [])));
+    const starred = tally(cards.flatMap((c) => (c.valueCall && c.valueCall.tier !== 'lean' ? [c.valueCall.grade] : [])));
     const graded = picks.w + picks.l + picks.push > 0;
     pages.set(info.week, {
       info,
       banner: weekBanner(info, L.first_official_week),
       cards,
-      summary: graded ? { picks, valueCalls } : null,
+      summary: graded ? { picks, valueCalls: starred.w + starred.l + starred.push > 0 ? starred : null } : null,
     });
   }
   const allCards = [...pages.values()].flatMap((p) => p.cards);

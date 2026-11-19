@@ -56,6 +56,32 @@ const exportStarred = (d: SiteData, w: number) => {
   return { one_star, two_star };
 };
 
+/** Grades of the starred value chips on a page (lean-tier calls have no chip), tallied. */
+function starredChipTally(html: string): { w: number; l: number; push: number } {
+  const grades = [...html.matchAll(/<li class="chip (win|loss|push|open)\b[^"]*"[^>]*>((?:(?!<\/li>)[\s\S])*)<\/li>/g)]
+    .filter((m) => /Value call <span class="stars/.test(m[2]!))
+    .map((m) => m[1]!);
+  return { w: grades.filter((g) => g === 'win').length, l: grades.filter((g) => g === 'loss').length, push: grades.filter((g) => g === 'push').length };
+}
+
+/** The week summary line's inner html, or null when the page has none. */
+const summaryHtml = (html: string): string | null => html.match(/<p class="summary[^"]*"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? null;
+const textOf = (h: string): string => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+/** An aria-hidden span, one level of nested spans allowed. */
+const ARIA_HIDDEN = /<span aria-hidden="true"[^>]*>(?:[^<]|<span[^>]*>[^<]*<\/span>)*<\/span>/g;
+
+/** The week summary line as seen (screen-reader-only text removed), or null when the page has none. */
+const summaryLine = (html: string): string | null => {
+  const h = summaryHtml(html);
+  return h === null ? null : textOf(h.replace(/<span class="sr[^"]*"[^>]*>[^<]*<\/span>/g, ''));
+};
+
+/** The week summary line as a screen reader reads it (aria-hidden text removed), or null when none. */
+const summarySpoken = (html: string): string | null => {
+  const h = summaryHtml(html);
+  return h === null ? null : textOf(h.replace(ARIA_HIDDEN, ''));
+};
+
 /** Cards on a page that carry the TOSS UP pill; asserts the pill sits in the top row next to a kept pick chip. */
 function tossPills(html: string): string[] {
   return [...html.matchAll(/<article[^>]*aria-label="([A-Z]+ at [A-Z]+)"[\s\S]*?<\/article>/g)]
@@ -249,6 +275,47 @@ describe('build output from the real export (invariants, every week)', () => {
     }
   });
 
+  it('week summary: value part counts only the graded starred chips (★/★★), every week', () => {
+    let lineWeeks = 0;
+    for (let w = 1; w <= 18; w++) {
+      const h = b.html(`week/${w}/index.html`);
+      const line = summaryLine(h);
+      if (line === null) continue;
+      lineWeeks++;
+      const m = line.match(/^Picks (\d+)–(\d+)(?: · Value calls ★ (\d+)–(\d+)(?: \((\d+) push(?:es)?\))?)?$/);
+      expect(m, `week ${w}: ${line}`).not.toBeNull();
+      const chips = starredChipTally(h);
+      const graded = chips.w + chips.l + chips.push;
+      if (graded === 0) {
+        expect(m![3], `week ${w}: ${line}`).toBeUndefined();
+      } else {
+        expect({ w: Number(m![3]), l: Number(m![4]), push: Number(m![5] ?? 0) }, `week ${w}: ${line}`).toEqual(chips);
+      }
+      // and the data layer agrees with the rendered chips
+      const site = buildSite(d).pages.get(w)!.summary!;
+      expect(site.valueCalls ?? { w: 0, l: 0, push: 0 }, `week ${w}`).toEqual(chips);
+      // screen readers: the ★ is hidden and words replace it, as on the chips; same numbers
+      const spoken = summarySpoken(h)!;
+      expect(spoken, `week ${w}`).not.toContain('★');
+      expect(spoken, `week ${w}`).toBe(line.replace('Value calls ★', 'Starred value calls'));
+      if (graded > 0) {
+        expect(summaryHtml(h), `week ${w}`).toMatch(
+          /<span aria-hidden="true"[^>]*>Value calls <span class="stars[^"]*"[^>]*>★<\/span><\/span><span class="sr[^"]*"[^>]*>Starred value calls<\/span>/,
+        );
+      }
+    }
+    expect(lineWeeks).toBeGreaterThan(0);
+  });
+
+  it('a week whose only graded value calls are lean-tier shows no value part', () => {
+    const w8 = b.html('week/8/index.html');
+    const leanOnly = d.games.filter((g) => g.evaluation === 'live_2026' && g.week === 8 && g.bet);
+    expect(leanOnly.length).toBeGreaterThan(0);
+    expect(leanOnly.every((g) => g.value_tier === 'lean')).toBe(true);
+    expect(summaryLine(w8)).toMatch(/^Picks \d+–\d+$/);
+    expect(summarySpoken(w8)).toBe(summaryLine(w8));
+  });
+
   it('TOSS UP pill on exactly the toss-up games, in the top row, pick chip kept', () => {
     for (let w = 1; w <= 18; w++) expect(tossPills(b.html(`week/${w}/index.html`)), `week ${w}`).toEqual(tossUpsIn(d, w));
     const css = b.html('week/3/index.html').replace(/\s+/g, '');
@@ -313,11 +380,21 @@ describe('build output from the 2026-11-12 fixture (exact values)', () => {
   });
 
   it('week summary line on graded weeks only', () => {
-    const t = (p: string) => flat(text(p));
-    expect(t('week/7/index.html')).toMatch(/Picks \d+–\d+ · Value calls \d+–\d+/);
-    expect(t('week/5/index.html')).toMatch(/Picks \d+–\d+ · Value calls \d+–\d+ \(1 push\)/);
-    expect(t('week/10/index.html')).not.toMatch(/Picks \d+–\d+ ·/);
-    expect(t('week/12/index.html')).not.toMatch(/Picks \d+–\d+ ·/);
+    // Value part = graded ★/★★ calls only (display note, 2026-11-19); lean-tier calls are left out.
+    const lines = Object.fromEntries([3, 4, 5, 6, 7, 8, 9, 10, 12].map((w) => [w, summaryLine(html(`week/${w}/index.html`))]));
+    expect(lines).toEqual({
+      3: 'Picks 10–6 · Value calls ★ 4–1',
+      4: 'Picks 10–6 · Value calls ★ 2–1',
+      5: 'Picks 9–5 · Value calls ★ 3–2', // the week 5 push was a lean-tier call: no "(1 push)"
+      6: 'Picks 7–7 · Value calls ★ 1–0',
+      7: 'Picks 8–6 · Value calls ★ 1–3',
+      8: 'Picks 0–1', // its only value call (a loss) is lean-tier: no value part
+      9: null,
+      10: null,
+      12: null,
+    });
+    expect(summarySpoken(html('week/7/index.html'))).toBe('Picks 8–6 · Starred value calls 1–3');
+    expect(summarySpoken(html('week/8/index.html'))).toBe('Picks 0–1');
   });
 
   it('chips: pick, ★ and ★★ value calls, with icon and text; lean-tier calls get no chip', () => {
