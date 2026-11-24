@@ -1,0 +1,41 @@
+{
+  "season": 2026,
+  "week": 12,
+  "live": true,
+  "predicted_at_utc": "2026-11-24T20:52:01Z",
+  "snapshot_file": "schedules_2026_20261124T204910Z.parquet",
+  "snapshot_pulled_at_utc": "2026-11-24T20:49:10Z",
+  "snapshot_sha256": "94f401b5a0f1c2a28ec42a6fae47114c2bb34ae85e92fafa4d6608147080e4fb",
+  "snapshot_age_hours_at_run": 0.05,
+  "pbp_sha256": "1aeb6d13f3eafab224200fdddd668881e793a7d7b5aed4dc7b175cef81c276ee",
+  "models": {
+    "champion": {
+      "file": "models/live_2026_champion.joblib",
+      "sha256": "f813a2b0cb58d3202c547ca30c8dc90e242a84a8a9b74d5a82f43293571c1006",
+      "elo_home_adv": 44.72586959078301,
+      "calibrator": null
+    },
+    "challenger": {
+      "file": "models/live_2026_challenger_calibrated.joblib",
+      "sha256": "185d565f2c1202cb693a527766f875d259b2c118140933efe776621c13daad28",
+      "elo_home_adv": 44.72586959078301,
+      "calibrator": {
+        "slope": 0.8832113202052384,
+        "intercept": -0.039093543769617566,
+        "n_fit": 1355
+      }
+    }
+  },
+  "features_py_sha256": "6be77b8d3547da6b9b64586bb104e61633a83221d82e249a705ed003ef156de7",
+  "script_sha256": {
+    "predict_week.py": "f5eee56ca1ffcec4132afc23dd0117228c048904998a3950560c8426a3bdc742",
+    "common.py": "daaf186b0f9773655d40425d03bc8273420d1873209a20145e60fbe8edd2accf"
+  },
+  "n_games_predicted": 16,
+  "excluded_kicked_off": [],
+  "earlier_week_unplayed_not_due": [],
+  "no_bet_missing_line": [],
+  "official_bets": 12,
+  "hypothetical_bets": 16,
+  "predictions_sha256": "1844adbeb9680135642c24be19f2add92e4011949d700d8d256972d853398284"
+}
