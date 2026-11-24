@@ -8,11 +8,13 @@
     "home_baseline": "The simplest possible strategy: always pick the home team.",
     "log_loss": "A score for how good the win probabilities were, not just the picks. Confident wrong calls are punished hard. Lower is better; 0.693 is what a coin flip scores.",
     "mcnemar_p": "Exact McNemar test comparing two models on the same games, using only the games where exactly one of them was right. p below 0.05 would mean the gap is unlikely to be luck.",
+    "paper_bet": "A pretend 1-unit bet placed by the bet rule on every disagreement of 4 or more percentage points. It was fixed before the first official pick, to test whether the model can beat the betting market.",
     "pre_registered": "The rules and pass/fail thresholds were written down and frozen before the results existed.",
     "prediction_committed_at": "Author timestamp of the local git commit that added the week's prediction file. Set by the owner's computer; it is not proof of when the commit was pushed to GitHub.",
     "retroactive": "The 2026 betting rule applied after the fact to seasons it was not written for. Descriptive only; it was never a live or pre-registered test.",
     "roi": "Return on investment: units won divided by units staked. Tied games are refunded and left out. +10% means 10 cents profit per dollar bet.",
     "units": "Profit from paper bets of 1 unit each at the real listed odds (bookmaker margin included). +1.00 means one stake's worth of profit. No real money was ever bet.",
+    "value_call": "A paper bet where the model's chance is at least 11 percentage points above the market's (one star), or at least 16 (two stars). A label for the largest disagreements; smaller paper bets are not value calls.",
     "vegas_favorite": "Always pick the team the betting market favored by the point spread. For 2023-2025 this is one untimestamped line per game (most likely the closing line); for 2026 it is the line saved at the moment the prediction was logged.",
     "vegas_implied": "The betting market's own win probability, read from the moneyline odds with the bookmaker's built-in margin removed so both teams add up to 100%."
   },
@@ -22571,7 +22573,7 @@
       "week": 12
     }
   ],
-  "generated_at": "2026-11-24T22:23:28Z",
+  "generated_at": "2026-11-24T23:20:45Z",
   "held_out_2023_24": {
     "game_types": [
       "REG"
@@ -22967,7 +22969,7 @@
     }
   },
   "live_2026": {
-    "amendment_6_note": "Value tiers, wins over expected and the toss-up flag are descriptive only (docs/PHASE10_PREREG.md Amendments 6 and 7). They change no bet, grade or verdict; the season-end verdict rests on CLV alone.",
+    "amendment_6_note": "Value calls (★/★★), wins over expected and the toss-up flag are descriptive only (docs/PHASE10_PREREG.md Amendments 6, 7 and 8). They change no bet, grade or verdict; the season-end verdict rests on the CLV of all official paper bets.",
     "as_of_source": "latest schedule snapshot schedules_2026_20261124T204910Z.parquet",
     "as_of_utc": "2026-11-24T20:49:10Z",
     "challenger_bets_hypothetical": {
@@ -23077,6 +23079,94 @@
       "units": 6.9785,
       "voids": 1,
       "wins": 32
+    },
+    "paper_bets": {
+      "clv": {
+        "ci95": [
+          -0.0103,
+          0.0082
+        ],
+        "mean": -0.0011,
+        "n": 20,
+        "n_excluded": 46,
+        "p_one_sided": 0.5934
+      },
+      "edge_threshold": 0.04,
+      "graded": 66,
+      "label": "Paper bets (4-point rule, pre-registered)",
+      "logged": 78,
+      "losses": 33,
+      "non_starred": {
+        "graded": 45,
+        "logged": 50,
+        "losses": 24,
+        "model_expected": 3.2308,
+        "model_expected_per_call": 0.0734,
+        "n": 44,
+        "pushes": 1,
+        "vegas_expected": 20.1792,
+        "wins": 20,
+        "woe": -0.1792,
+        "woe_per_call": -0.0041,
+        "won": 20
+      },
+      "pending": 12,
+      "pushes": 1,
+      "record": "32-33-1",
+      "roi": 0.1074,
+      "roi_ci95": [
+        -0.233,
+        0.4478
+      ],
+      "units": 6.9785,
+      "verdict": {
+        "final": false,
+        "so_far": "No evidence of an edge",
+        "status": "decided after week 18"
+      },
+      "wins": 32,
+      "wins_over_expected": {
+        "graded": 66,
+        "logged": 78,
+        "losses": 33,
+        "model_expected": 6.6026,
+        "model_expected_per_call": 0.1016,
+        "n": 65,
+        "pushes": 1,
+        "vegas_expected": 28.9026,
+        "wins": 32,
+        "woe": 3.0974,
+        "woe_per_call": 0.0477,
+        "won": 32
+      }
+    },
+    "picks_vs_vegas": {
+      "different_winner": {
+        "games": 16,
+        "losses": 8,
+        "wins": 8
+      },
+      "games": 102,
+      "model": {
+        "ci95": [
+          0.5207,
+          0.7061
+        ],
+        "k": 63,
+        "n": 102,
+        "value": 0.6176
+      },
+      "no_favorite": 0,
+      "same_winner": 86,
+      "vegas_favorite": {
+        "ci95": [
+          0.5207,
+          0.7061
+        ],
+        "k": 63,
+        "n": 102,
+        "value": 0.6176
+      }
     },
     "prediction_quality": {
       "challenger": {
@@ -23214,66 +23304,53 @@
     "provenance_note": "prediction_committed_at is the local git author time of the commit that added each week's prediction file. The owner's computer sets it, so it is not proof of push time.",
     "ties": 1,
     "toss_up_threshold": 0.55,
+    "value_calls": {
+      "graded": 21,
+      "logged": 28,
+      "losses": 9,
+      "model_expected": 3.3718,
+      "model_expected_per_call": 0.1606,
+      "n": 21,
+      "pushes": 0,
+      "record": "12-9-0",
+      "tiers": {
+        "one_star": {
+          "graded": 12,
+          "logged": 15,
+          "losses": 6,
+          "model_expected": 1.571,
+          "model_expected_per_call": 0.1309,
+          "n": 12,
+          "pushes": 0,
+          "vegas_expected": 5.5144,
+          "wins": 6,
+          "woe": 0.4856,
+          "woe_per_call": 0.0405,
+          "won": 6
+        },
+        "two_star": {
+          "graded": 9,
+          "logged": 13,
+          "losses": 3,
+          "model_expected": 1.8008,
+          "model_expected_per_call": 0.2001,
+          "n": 9,
+          "pushes": 0,
+          "vegas_expected": 3.209,
+          "wins": 6,
+          "woe": 2.791,
+          "woe_per_call": 0.3101,
+          "won": 6
+        }
+      },
+      "vegas_expected": 8.7233,
+      "wins": 12,
+      "woe": 3.2767,
+      "woe_per_call": 0.156,
+      "won": 12
+    },
     "value_tier_one_star_edge": 0.11,
     "value_tier_two_star_edge": 0.16,
-    "value_woe": {
-      "all": {
-        "calls_graded": 66,
-        "calls_logged": 78,
-        "losses": 33,
-        "model_expected": 6.6026,
-        "model_expected_per_call": 0.1016,
-        "n": 65,
-        "pushes": 1,
-        "vegas_expected": 28.9026,
-        "wins": 32,
-        "woe": 3.0974,
-        "woe_per_call": 0.0477,
-        "won": 32
-      },
-      "lean": {
-        "calls_graded": 45,
-        "calls_logged": 50,
-        "losses": 24,
-        "model_expected": 3.2308,
-        "model_expected_per_call": 0.0734,
-        "n": 44,
-        "pushes": 1,
-        "vegas_expected": 20.1792,
-        "wins": 20,
-        "woe": -0.1792,
-        "woe_per_call": -0.0041,
-        "won": 20
-      },
-      "one_star": {
-        "calls_graded": 12,
-        "calls_logged": 15,
-        "losses": 6,
-        "model_expected": 1.571,
-        "model_expected_per_call": 0.1309,
-        "n": 12,
-        "pushes": 0,
-        "vegas_expected": 5.5144,
-        "wins": 6,
-        "woe": 0.4856,
-        "woe_per_call": 0.0405,
-        "won": 6
-      },
-      "two_star": {
-        "calls_graded": 9,
-        "calls_logged": 13,
-        "losses": 3,
-        "model_expected": 1.8008,
-        "model_expected_per_call": 0.2001,
-        "n": 9,
-        "pushes": 0,
-        "vegas_expected": 3.209,
-        "wins": 6,
-        "woe": 2.791,
-        "woe_per_call": 0.3101,
-        "won": 6
-      }
-    },
     "weeks": [
       {
         "decided": 16,
@@ -26283,10 +26360,10 @@
       "week": 18
     }
   ],
-  "schema_version": "1.4.1",
+  "schema_version": "1.5.0",
   "source_commit": {
     "dirty": false,
     "dirty_paths": [],
-    "hash": "ec34ac9aee046c17b6c75c60b134703bcdd15b01"
+    "hash": "5e70c405af06556220557019dcc57070296d0d33"
   }
 }
