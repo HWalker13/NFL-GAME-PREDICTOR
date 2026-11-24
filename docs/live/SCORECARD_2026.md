@@ -1,6 +1,6 @@
 # 2026 shadow-mode scorecard
 
-_Generated 2026-11-17T23:33:32Z from 7 graded week file(s): 3, 4, 5, 6, 7, 8, 10. Paper trading only -- no real money.
+_Generated 2026-11-24T20:51:00Z from 8 graded week file(s): 3, 4, 5, 6, 7, 8, 10, 11. Paper trading only -- no real money.
 Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged predictions are never edited._
 
 ## How to read this
@@ -27,25 +27,25 @@ Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged p
 - Ties are excluded from accuracy / log loss / Brier and are void (0 units) for bets. Pending games
   (no final score yet) are excluded everywhere and counted.
 
-Games logged: 90 (decided 89, tie 1, pending 0).
+Games logged: 103 (decided 102, tie 1, pending 0).
 
 ## Cumulative -- prediction quality
 
 | Predictor | n | Accuracy [95% CI] | Log loss [95% CI] | Brier [95% CI] |
 |---|---:|---|---|---|
-| Champion | 89 | 53/89 = 0.596 [0.492, 0.691] | 0.655 [0.585, 0.726] | 0.233 [0.200, 0.266] |
-| Challenger | 89 | 53/89 = 0.596 [0.492, 0.691] | 0.650 [0.587, 0.712] | 0.230 [0.201, 0.259] |
-| Home baseline | 89 | 39/89 = 0.438 [0.340, 0.542] | – | – |
-| Vegas favorite (prediction snapshot) | 89 | 54/89 = 0.607 [0.503, 0.702] | – | – |
-| Vegas implied (prediction snapshot) | 89 | – | 0.666 [0.592, 0.741] | 0.237 [0.203, 0.270] |
+| Champion | 102 | 63/102 = 0.618 [0.521, 0.706] | 0.638 [0.571, 0.704] | 0.225 [0.195, 0.256] |
+| Challenger | 102 | 63/102 = 0.618 [0.521, 0.706] | 0.635 [0.577, 0.694] | 0.224 [0.196, 0.251] |
+| Home baseline | 102 | 51/102 = 0.500 [0.405, 0.595] | – | – |
+| Vegas favorite (prediction snapshot) | 102 | 63/102 = 0.618 [0.521, 0.706] | – | – |
+| Vegas implied (prediction snapshot) | 102 | – | 0.650 [0.578, 0.722] | 0.230 [0.198, 0.262] |
 
 ## Cumulative -- paper bets and line movement
 
 | Model | Bets (home) | W-L-Void (pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n, excluded) | One-sided p (CLV>0) | Line move -> model [95% CI] (n) |
 |---|---:|---|---:|---|---|---:|---|
-| Champion | 58 (38) | 29-28-1 (0) | +7.21 | 0.127 [-0.239, 0.492] | -0.0059 [-0.0200, 0.0082] (n=12, excl 46) | 0.8123 | -0.0012 [-0.0091, 0.0067] (n=25) |
-| Challenger | 54 (31) | 28-25-1 (0) | +14.43 | 0.272 [-0.141, 0.686] | -0.0086 [-0.0209, 0.0037] (n=12, excl 42) | 0.9237 | -0.0032 [-0.0110, 0.0046] (n=25) |
-| Official record (bet_status = official) | 58 (38) | 29-28-1 (0) | +7.21 | 0.127 [-0.239, 0.492] | -0.0059 [-0.0200, 0.0082] (n=12, excl 46) | 0.8123 | – |
+| Champion | 66 (41) | 32-33-1 (0) | +6.98 | 0.107 [-0.233, 0.448] | -0.0011 [-0.0103, 0.0082] (n=20, excl 46) | 0.5934 | 0.0006 [-0.0054, 0.0067] (n=38) |
+| Challenger | 63 (33) | 30-32-1 (0) | +11.58 | 0.187 [-0.190, 0.564] | -0.0054 [-0.0127, 0.0019] (n=21, excl 42) | 0.9314 | -0.0002 [-0.0063, 0.0058] (n=38) |
+| Official record (bet_status = official) | 66 (41) | 32-33-1 (0) | +6.98 | 0.107 [-0.233, 0.448] | -0.0011 [-0.0103, 0.0082] (n=20, excl 46) | 0.5934 | – |
 
 `Bets (home)` shows how many bets were on the home side: both models carry the known home-win bias (Phase 8 negative calibration intercepts), so a home-heavy bet mix is expected.
 
@@ -57,12 +57,12 @@ Edge = model probability minus vig-free implied probability for the side bet, at
 
 | Model | Edge bucket | Bets | W-L (void, pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n) | Sample |
 |---|---|---:|---|---:|---|---|---|
-| champion | [0.04, 0.06) | 13 | 5-7 (1, 0) | -2.54 | -0.212 [-0.867, 0.443] | -0.0090 [-0.2920, 0.2739] (n=2) | small sample (n<30) |
-| champion | [0.06, 0.08) | 12 | 9-3 (0, 0) | +7.38 | 0.615 [-0.519, 1.749] | -0.0042 [-0.0570, 0.0485] (n=4) | small sample (n<30) |
-| champion | [0.08+) | 33 | 15-18 (0, 0) | +2.37 | 0.072 [-0.395, 0.539] | -0.0060 [-0.0215, 0.0095] (n=6) |  |
-| challenger | [0.04, 0.06) | 15 | 9-6 (0, 0) | +0.75 | 0.050 [-0.471, 0.571] | -0.0081 [-0.0537, 0.0376] (n=4) | small sample (n<30) |
-| challenger | [0.06, 0.08) | 7 | 3-3 (1, 0) | +2.55 | 0.426 [-1.623, 2.475] | -0.0176 [-0.1919, 0.1567] (n=2) | small sample (n<30) |
-| challenger | [0.08+) | 32 | 16-16 (0, 0) | +11.13 | 0.348 [-0.247, 0.943] | -0.0060 [-0.0215, 0.0095] (n=6) |  |
+| champion | [0.04, 0.06) | 14 | 5-8 (1, 0) | -3.54 | -0.273 [-0.884, 0.338] | -0.0052 [-0.0629, 0.0526] (n=3) | small sample (n<30) |
+| champion | [0.06, 0.08) | 16 | 10-6 (0, 0) | +5.00 | 0.312 [-0.573, 1.197] | 0.0024 [-0.0191, 0.0239] (n=8) | small sample (n<30) |
+| champion | [0.08+) | 36 | 17-19 (0, 0) | +5.52 | 0.153 [-0.306, 0.613] | -0.0027 [-0.0133, 0.0078] (n=9) |  |
+| challenger | [0.04, 0.06) | 17 | 9-8 (0, 0) | -1.25 | -0.074 [-0.561, 0.413] | -0.0058 [-0.0295, 0.0180] (n=6) | small sample (n<30) |
+| challenger | [0.06, 0.08) | 8 | 3-4 (1, 0) | +1.55 | 0.222 [-1.500, 1.944] | -0.0181 [-0.0523, 0.0160] (n=3) | small sample (n<30) |
+| challenger | [0.08+) | 38 | 18-20 (0, 0) | +11.28 | 0.297 [-0.237, 0.831] | -0.0020 [-0.0096, 0.0055] (n=12) |  |
 
 ## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)
 
@@ -70,16 +70,16 @@ Descriptive only (Amendments 6 and 7). Nothing here changes the paper-bet rule, 
 
 | Value calls | Logged | W-L (push, pending) | n (graded, no push) | Won | Vegas expected | Model expected | WOE | WOE per call | Model expected per call |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| All official value calls | 58 | 29-28 (1, 0) | 57 | 29 | 26.721 | 5.937 | +2.279 | +0.0400 | +0.1042 |
-| Lean edge [0.04, 0.11) | 38 | 18-19 (1, 0) | 37 | 18 | 18.341 | 2.738 | -0.341 | -0.0092 | +0.0740 |
+| All official value calls | 66 | 32-33 (1, 0) | 65 | 32 | 28.903 | 6.603 | +3.097 | +0.0477 | +0.1016 |
+| Lean edge [0.04, 0.11) | 45 | 20-24 (1, 0) | 44 | 20 | 20.179 | 3.231 | -0.179 | -0.0041 | +0.0734 |
 | ★ edge [0.11, 0.16) | 12 | 6-6 (0, 0) | 12 | 6 | 5.514 | 1.571 | +0.486 | +0.0405 | +0.1309 |
-| ★★ edge [0.16+) | 8 | 5-3 (0, 0) | 8 | 5 | 2.866 | 1.628 | +2.134 | +0.2667 | +0.2035 |
+| ★★ edge [0.16+) | 9 | 6-3 (0, 0) | 9 | 6 | 3.209 | 1.801 | +2.791 | +0.3101 | +0.2001 |
 
 | Champion picks | Logged | Accuracy [95% CI] |
 |---|---:|---|
-| Confident (favorite > 0.55) | 69 | 43/68 = 0.632 [0.514, 0.737] |
-| Toss-up (favorite <= 0.55) | 21 | 10/21 = 0.476 [0.283, 0.676] |
-| All picks | 90 | 53/89 = 0.596 [0.492, 0.691] |
+| Confident (favorite > 0.55) | 80 | 51/79 = 0.646 [0.536, 0.742] |
+| Toss-up (favorite <= 0.55) | 23 | 12/23 = 0.522 [0.330, 0.708] |
+| All picks | 103 | 63/102 = 0.618 [0.521, 0.706] |
 
 ## Weekly
 
@@ -99,6 +99,8 @@ Descriptive only (Amendments 6 and 7). Nothing here changes the paper-bet rule, 
 | 8 | challenger | 1 | 0.000 | 0.9916 | 0.3957 | 0.000 | 0.000 | 0 | +0.00 | – (0) |
 | 10 | champion | 14 | 0.643 | 0.6257 | 0.2207 | 0.286 | 0.643 | 5 | -3.77 | -0.0073 (4) |
 | 10 | challenger | 14 | 0.571 | 0.6200 | 0.2177 | 0.286 | 0.643 | 5 | -3.77 | -0.0073 (4) |
+| 11 | champion | 13 | 0.769 | 0.5158 | 0.1710 | 0.923 | 0.692 | 8 | -0.23 | 0.0062 (8) |
+| 11 | challenger | 13 | 0.769 | 0.5375 | 0.1789 | 0.923 | 0.692 | 9 | -2.85 | -0.0011 (9) |
 
 ## Midseason checkpoint (weeks 4-9)
 
@@ -125,6 +127,6 @@ Mean per-game log loss: champion 0.65786, challenger 0.65046; mean difference (c
 
 Rule (pre-registered): "evidence of an edge" ONLY if the official mean bet CLV > 0 with a one-sided t-test p < 0.05; the units ROI 95% CI is reported alongside. ROI alone never counts as evidence.
 
-Official bets with measured CLV: n = 12; mean CLV = -0.0059 [-0.0200, 0.0082]; one-sided p = 0.8123. Units ROI = 0.127 [-0.239, 0.492].
+Official bets with measured CLV: n = 20; mean CLV = -0.0011 [-0.0103, 0.0082]; one-sided p = 0.5934. Units ROI = 0.107 [-0.233, 0.448].
 
 **No evidence of an edge** under the rule (as of the games graded so far).

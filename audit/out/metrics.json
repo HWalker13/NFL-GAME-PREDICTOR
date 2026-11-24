@@ -711,7 +711,7 @@
         "games_logged": 13,
         "predicted_at_utc": "2026-11-17T21:24:01Z",
         "first_logged_kickoff_utc": "2026-11-20T01:15:00Z",
-        "graded": false
+        "graded": true
       }
     },
     "graded_weeks": [
@@ -721,91 +721,92 @@
       6,
       7,
       8,
-      10
+      10,
+      11
     ],
-    "games_graded": 90,
+    "games_graded": 103,
     "ties": 1,
     "score_mismatch_vs_latest_snapshot": 0,
-    "latest_snapshot": "schedules_2026_20261117T212300Z.parquet",
+    "latest_snapshot": "schedules_2026_20261124T204910Z.parquet",
     "bet_rule_mismatch_vs_logged": 0,
     "units_max_abs_diff_vs_graded": 4.9494963683116566e-11,
     "champion": {
-      "k": 53,
-      "n": 89,
-      "acc": 0.5955,
+      "k": 63,
+      "n": 102,
+      "acc": 0.6176,
       "wilson95": [
-        0.4916,
-        0.6915
+        0.5207,
+        0.7061
       ],
-      "brier": 0.233,
-      "log_loss": 0.6555
+      "brier": 0.2251,
+      "log_loss": 0.6377
     },
     "home_baseline": {
-      "k": 39,
-      "n": 89,
-      "acc": 0.4382,
+      "k": 51,
+      "n": 102,
+      "acc": 0.5,
       "wilson95": [
-        0.3398,
-        0.5417
+        0.4047,
+        0.5953
       ]
     },
     "vegas_favorite": {
-      "k": 54,
-      "n": 89,
-      "acc": 0.6067,
+      "k": 63,
+      "n": 102,
+      "acc": 0.6176,
       "wilson95": [
-        0.5029,
-        0.7018
+        0.5207,
+        0.7061
       ]
     },
     "vegas_novig_implied": {
-      "brier": 0.2366,
-      "log_loss": 0.6664
+      "brier": 0.2301,
+      "log_loss": 0.6498
     },
     "disagree_with_vegas": {
-      "n": 15,
-      "model_right": 7,
+      "n": 16,
+      "model_right": 8,
       "wilson95": [
-        0.2481,
-        0.6988
+        0.28,
+        0.72
       ]
     },
     "bets": {
-      "n_bets": 58,
-      "pct_of_games": 0.6444,
-      "W": 29,
-      "L": 28,
+      "n_bets": 66,
+      "pct_of_games": 0.6408,
+      "W": 32,
+      "L": 33,
       "P": 1,
-      "win_rate": 0.5088,
+      "win_rate": 0.4923,
       "win_rate_wilson95": [
-        0.3826,
-        0.6338
+        0.3746,
+        0.6108
       ],
       "breakeven_at_minus110": 0.5238,
-      "breakeven_mean_implied_of_prices_taken": 0.4888,
-      "units": 7.21,
-      "roi_per_settled_bet": 0.1265,
-      "bets_against_model_pick": 21,
+      "breakeven_mean_implied_of_prices_taken": 0.4636,
+      "units": 6.98,
+      "roi_per_settled_bet": 0.1074,
+      "bets_against_model_pick": 27,
       "model_acc_on_bet_games": {
-        "k": 33,
-        "n": 57,
-        "acc": 0.5789,
+        "k": 40,
+        "n": 65,
+        "acc": 0.6154,
         "wilson95": [
-          0.4498,
-          0.6981
+          0.4938,
+          0.724
         ]
       },
       "model_acc_on_nobet_games": {
-        "k": 20,
-        "n": 32,
-        "acc": 0.625,
+        "k": 23,
+        "n": 37,
+        "acc": 0.6216,
         "wilson95": [
-          0.4525,
-          0.7707
+          0.461,
+          0.7594
         ]
       },
-      "clv_measured_n": 12,
-      "clv_mean": -0.0059
+      "clv_measured_n": 20,
+      "clv_mean": -0.0011
     }
   },
   "sign_convention_examples": [
