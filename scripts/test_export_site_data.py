@@ -21,6 +21,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pandas as pd
+
 from scripts import export_site_data as E
 from scripts.live import common as C
 from scripts.live import scorecard as SC
@@ -348,6 +350,40 @@ class Schedule2026(unittest.TestCase):
                 if g["result"] != "pending":   # graded scores agree with the schedule's
                     self.assertEqual((s["away_score"], s["home_score"]), (g["away_score"], g["home_score"]))
 
+    def test_moved_kickoffs(self):
+        """A moved game was predicted before its actual kickoff, and its CLV snapshot was pulled
+        before the earlier of the logged and actual kickoffs."""
+        logged = E.load_live_predictions()
+        logged = logged[logged["model"] == "champion"].set_index("game_id")["kickoff_utc"]
+        graded = SC.load_graded(E.LIVE_ROOT, E.LIVE_SEASON)
+        graded = graded[graded["model"] == "champion"].set_index("game_id")
+        for g in self.live:
+            with self.subTest(game=g["game_id"]):
+                self.assertEqual(g["kickoff_logged_utc"], logged[g["game_id"]])
+                self.assertIs(g["kickoff_moved"], g["kickoff_utc"] != g["kickoff_logged_utc"])
+                if not g["kickoff_moved"]:
+                    continue
+                actual = C.parse_utc(g["kickoff_utc"])
+                self.assertLess(C.parse_utc(g["predicted_at_utc"]), actual)
+                if g["game_id"] in graded.index:
+                    pulled = graded.at[g["game_id"], "last_prekickoff_snapshot_pulled_at_utc"]
+                    if isinstance(pulled, str):   # blank when no snapshot preceded kickoff
+                        self.assertLess(C.parse_utc(pulled), min(C.parse_utc(g["kickoff_logged_utc"]), actual))
+        moved = {g["game_id"] for g in self.live if g["kickoff_moved"]}
+        self.assertLessEqual({"2026_11_PIT_PHI", "2026_11_JAX_NYG"}, moved)   # week 11 flex
+
+    def test_graded_kickoff_mismatch_is_flagged(self):
+        kicks = pd.Series({"a": pd.Timestamp("2026-11-22 18:00")})
+        def errs(value, result="home"):
+            out: list[str] = []
+            E.check_graded_kickoffs(pd.DataFrame({"game_id": ["a"], "result": [result],
+                                                  "actual_kickoff_utc": [value]}), kicks, out)
+            return out
+        self.assertEqual(errs("2026-11-22T18:00:00Z"), [])
+        self.assertEqual(len(errs("2026-11-22T21:25:00Z")), 1)
+        self.assertEqual(errs("2026-11-22T21:25:00Z", "pending"), [])   # not played yet: may still move
+        self.assertEqual(errs(float("nan")), [])                        # graded before the column existed
+
     def test_matches_snapshot(self):
         snap = SC.load_schedule_kickoffs(E.LIVE_SEASON)
         self.assertEqual(len(self.sched), len(snap))
@@ -399,7 +435,7 @@ class Amendment6(unittest.TestCase):
         self.assertEqual(self.L["value_tier_two_star_edge"], C.VALUE_TIER_2_EDGE)
         self.assertEqual((self.L["value_tier_one_star_edge"], self.L["value_tier_two_star_edge"]), (0.11, 0.16))
         self.assertEqual(self.L["toss_up_threshold"], C.TOSS_UP_MAX_FAV)
-        self.assertEqual(self.d["schema_version"], "1.4.0")
+        self.assertEqual(self.d["schema_version"], "1.4.1")
         self.assertEqual(list(self.vw), sorted(SC.TIER_KEYS))   # keys sorted in the JSON
 
     def test_tier_counts_sum_to_official(self):

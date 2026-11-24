@@ -169,6 +169,38 @@ def latest_snapshot(season: int, snap_dir: Path = SNAPSHOT_DIR) -> Path:
     return snaps[-1]
 
 
+def parse_utc(ts) -> pd.Timestamp:
+    """A logged UTC timestamp string (or Timestamp) as naive UTC."""
+    return naive_utc(pd.Timestamp(ts))
+
+
+def schedule_kickoffs(snap: Path, season: int) -> pd.Series:
+    """game_id -> naive-UTC kickoff of every REG game of ``season`` in ``snap``,
+    via the same kickoff definition predict_week uses."""
+    from src import live_features as LF
+    s = LF.season_schedule_with_kickoff(pd.read_parquet(snap), season)
+    return s.set_index("game_id")["kickoff"]
+
+
+def kickoff_moved(logged_kickoff: pd.Timestamp, actual_kickoff: pd.Timestamp) -> bool:
+    """True if the game's kickoff differs from the one logged with the prediction."""
+    return bool(logged_kickoff != actual_kickoff)
+
+
+def check_predicted_before_kickoff(pred: pd.DataFrame, actual: pd.Series) -> None:
+    """Refuse if any logged prediction was not made strictly before its game's
+    ACTUAL kickoff (``actual``: game_id -> naive UTC). A game absent from the
+    schedule has no actual kickoff and is checked against the logged one."""
+    late = {}
+    for r in pred.itertuples(index=False):
+        kick = actual.get(r.game_id, parse_utc(r.kickoff_utc))
+        if not parse_utc(r.predicted_at_utc) < kick:
+            late[r.game_id] = f"{r.game_id} (predicted {r.predicted_at_utc}, kickoff {iso(kick)})"
+    if late:
+        raise GuardError(f"{len(late)} game(s) not predicted before the actual kickoff: "
+                         f"{sorted(late.values())}")
+
+
 def check_freshness(season: int, raw_dir: Path = RAW_DIR, snap_dir: Path = SNAPSHOT_DIR,
                     metadata_path: Path = METADATA_PATH) -> Path:
     """Refuse unless the latest snapshot is at least as new as the latest raw

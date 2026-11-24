@@ -1,4 +1,4 @@
-# `site_data.json` schema (v1.4.0)
+# `site_data.json` schema (v1.4.1)
 
 Written by `python -m scripts.export_site_data` and tested by `python -m scripts.test_export_site_data`.
 This is an export layer only. Every number is recomputed from per-game data with the project's own
@@ -9,7 +9,7 @@ McNemar). If any of them disagree, the exporter writes nothing and exits 2.
 The `negative_control` block is the exception: it is copied, not recomputed, from
 `audit/out/negative_control.json`, and gated instead (see [`negative_control`](#negative_control)).
 
-**Changelog.** 1.4.0: Amendment 7's three display tiers replace Amendment 6's two. Per-game `value_tier` is now the string `"lean"`, `"one_star"` or `"two_star"` (was the int 1 or 2); `live_2026.value_woe` gains a `lean` key, and `one_star` / `two_star` cover the new edge ranges; `live_2026.value_tier_two_star_edge` is now 0.16 (was 0.08); added `live_2026.value_tier_one_star_edge` (0.11). The `value_tier` type change is not backward compatible for a reader that expects 1 / 2. No other field changed. 1.3.0: added the Amendment 6 display-only fields: `live_2026.value_tier_two_star_edge`, `live_2026.toss_up_threshold`, `live_2026.value_woe`, `live_2026.prediction_quality_by_confidence`, `live_2026.amendment_6_note`, and per-game `value_tier` / `toss_up` on live games (additive; no existing field changed). 1.2.0: added the top-level `schedule_2026` block and `live_2026.edge_threshold`
+**Changelog.** 1.4.1: on live games, `kickoff_utc` is now the actual kickoff from the latest schedule snapshot (was the kickoff logged with the prediction; they differ only for games the NFL moved), and `kickoff_logged_utc` / `kickoff_moved` are added. Historical games are unchanged. 1.4.0: Amendment 7's three display tiers replace Amendment 6's two. Per-game `value_tier` is now the string `"lean"`, `"one_star"` or `"two_star"` (was the int 1 or 2); `live_2026.value_woe` gains a `lean` key, and `one_star` / `two_star` cover the new edge ranges; `live_2026.value_tier_two_star_edge` is now 0.16 (was 0.08); added `live_2026.value_tier_one_star_edge` (0.11). The `value_tier` type change is not backward compatible for a reader that expects 1 / 2. No other field changed. 1.3.0: added the Amendment 6 display-only fields: `live_2026.value_tier_two_star_edge`, `live_2026.toss_up_threshold`, `live_2026.value_woe`, `live_2026.prediction_quality_by_confidence`, `live_2026.amendment_6_note`, and per-game `value_tier` / `toss_up` on live games (additive; no existing field changed). 1.2.0: added the top-level `schedule_2026` block and `live_2026.edge_threshold`
 (additive; no existing field changed). 1.1.0: added the top-level `negative_control` block (additive; no existing field changed).
 1.0.0: first release.
 
@@ -31,7 +31,7 @@ The `negative_control` block is the exception: it is copied, not recomputed, fro
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | string | Semver of this schema. Currently `"1.4.0"`. |
+| `schema_version` | string | Semver of this schema. Currently `"1.4.1"`. |
 | `generated_at` | string | UTC time the export content last changed. |
 | `source_commit` | object | Git state at export time: `hash` (full HEAD hash), `dirty` (true if anything outside `exports/` was uncommitted or untracked), `dirty_paths` (those paths). A `dirty: true` export was built from code or data not in `hash`. |
 | `definitions` | object | Plain-English one-liners for non-technical readers. Keys: `accuracy`, `log_loss`, `brier`, `home_baseline`, `vegas_favorite`, `vegas_implied`, `units`, `roi`, `clv`, `bet_rule`, `ci95`, `mcnemar_p`, `retroactive`, `pre_registered`, `prediction_committed_at`. |
@@ -198,7 +198,9 @@ exporter writes nothing and exits 2 if any `live_2026` game is missing here or d
 | `season`, `week` | int | |
 | `game_id` | string | nflverse id, e.g. `2026_07_NE_CHI`. |
 | `away`, `home` | string | Team abbreviations. |
-| `kickoff_utc` | string | Scheduled kickoff (UTC). |
+| `kickoff_utc` | string | Kickoff (UTC). Live games: the actual kickoff, from the latest schedule snapshot (always equal to `schedule_2026`). |
+| `kickoff_logged_utc` | string | Live only: the kickoff logged with the prediction (UTC). |
+| `kickoff_moved` | bool | Live only: true when `kickoff_utc` differs from `kickoff_logged_utc`. |
 | `model` | string | Which model's probability this is: `LR-tuned` for history, `champion (LR-tuned, frozen 2026)` for live. |
 | `model_home_prob` | float | Model P(home win). |
 | `vegas_implied_home_prob` | float \| null | Vig-free market P(home win). Null if no moneyline. |

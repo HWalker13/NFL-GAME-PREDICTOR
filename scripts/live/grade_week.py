@@ -15,7 +15,10 @@ Per game x model:
   loss = -1, tie = void, stake returned, 0 units); and line movement.
 
 Line movement is measured to the **last pre-kickoff snapshot**: the latest
-snapshot taken strictly before that game's kickoff. It is NOT the closing
+snapshot taken strictly before that game's kickoff -- the EARLIER of the logged
+and the actual kickoff, where the actual kickoff is the one in the scores
+snapshot (clarification 2026-11-24; ``kickoff_moved`` records a difference, and
+a game not predicted before its actual kickoff is refused). It is NOT the closing
 line -- snapshots exist only when the owner refreshes. If that snapshot is
 not later than the prediction snapshot (e.g. Thursday games when nothing was
 pulled in between), CLV is excluded for that game and counted. Amendment 3
@@ -72,14 +75,18 @@ def last_prekickoff_snapshot(snapshots: list[Path], kickoff: pd.Timestamp) -> Pa
 
 def grade(pred: pd.DataFrame, snapshots: list[Path], scores_snapshot: Path,
           now: pd.Timestamp) -> pd.DataFrame:
-    """Pure grading of a predictions frame. ``snapshots`` oldest first."""
+    """Pure grading of a predictions frame. ``snapshots`` oldest first. Raises
+    GuardError if a game was not predicted before its actual kickoff."""
     cache: dict = {}
+    actual = pd.concat([C.schedule_kickoffs(scores_snapshot, int(s)) for s in pred["season"].unique()])
+    C.check_predicted_before_kickoff(pred, actual)
     scores = _lines(scores_snapshot, cache)
     rows = []
     for r in pred.itertuples(index=False):
         g = r._asdict()
-        kickoff = pd.Timestamp(r.kickoff_utc).tz_localize(None) if pd.Timestamp(r.kickoff_utc).tzinfo \
-            else pd.Timestamp(r.kickoff_utc)
+        logged_kick = C.parse_utc(r.kickoff_utc)
+        actual_kick = actual.get(r.game_id)      # None: game absent from the snapshot (graded as pending)
+        window_end = logged_kick if actual_kick is None else min(logged_kick, actual_kick)
         hs = scores.at[r.game_id, "home_score"] if r.game_id in scores.index else np.nan
         as_ = scores.at[r.game_id, "away_score"] if r.game_id in scores.index else np.nan
         g.update(home_score=hs, away_score=as_, scores_snapshot_file=scores_snapshot.name)
@@ -115,7 +122,7 @@ def grade(pred: pd.DataFrame, snapshots: list[Path], scores_snapshot: Path,
         outcome, units = C.bet_units(r.paper_bet, r.bet_price, hs, as_)
         g.update(bet_outcome=outcome, units=units)
 
-        late = last_prekickoff_snapshot(snapshots, kickoff)
+        late = last_prekickoff_snapshot(snapshots, window_end)
         pred_time = C.snapshot_time(Path(r.snapshot_file))
         g.update(last_prekickoff_snapshot_file=late.name if late else "",
                  last_prekickoff_snapshot_pulled_at_utc=C.iso(C.snapshot_time(late)) if late else "",
@@ -138,6 +145,8 @@ def grade(pred: pd.DataFrame, snapshots: list[Path], scores_snapshot: Path,
                          bet_clv=C.bet_clv(r.paper_bet, imp, pl),
                          line_move_toward_model=C.line_move_toward_model(p, imp, pl))
         g["graded_at_utc"] = C.iso(now)
+        g.update(actual_kickoff_utc=C.iso(actual_kick),
+                 kickoff_moved=actual_kick is not None and C.kickoff_moved(logged_kick, actual_kick))
         rows.append(g)
     return pd.DataFrame(rows)
 
@@ -167,7 +176,11 @@ def main(argv=None) -> int:
         return 2
     pred_sha_before = C.sha256_file(pred_path)
     pred = pd.read_csv(pred_path)
-    graded = grade(pred, C.list_snapshots(args.season), scores_snap, C.naive_utc(C.utc_now()))
+    try:
+        graded = grade(pred, C.list_snapshots(args.season), scores_snap, C.naive_utc(C.utc_now()))
+    except C.GuardError as exc:
+        print(f"REFUSING: {exc}")
+        return 2
     assert C.sha256_file(pred_path) == pred_sha_before, "predictions file changed during grading"
     write_graded(graded, out)
 
@@ -177,6 +190,9 @@ def main(argv=None) -> int:
           f"pending {int((g['result'] == 'pending').sum())})")
     print("CLV status (champion rows):")
     print(g["clv_status"].value_counts().to_string())
+    moved = g[g["kickoff_moved"]]
+    for r in moved.itertuples(index=False):
+        print(f"kickoff moved: {r.game_id} logged {r.kickoff_utc} -> actual {r.actual_kickoff_utc}")
     print(f"wrote {out}")
     return 0
 

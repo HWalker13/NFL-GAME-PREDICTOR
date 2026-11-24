@@ -54,7 +54,7 @@ from scripts.live import common as C
 from scripts.live import scorecard as SC
 
 ROOT = C.PROJECT_ROOT
-SCHEMA_VERSION = "1.4.0"
+SCHEMA_VERSION = "1.4.1"
 EXPORT_DIR = ROOT / "exports"
 OUT_PATH = EXPORT_DIR / "site_data.json"
 METRICS_PATH = ROOT / "audit" / "out" / "metrics.json"
@@ -596,6 +596,10 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
         })
 
     # ---- games ------------------------------------------------------------------
+    # kickoff_utc = actual kickoff (latest schedule snapshot), so it equals schedule_2026;
+    # the logged kickoff stays in kickoff_logged_utc.
+    actual = schedule.set_index("game_id")["kickoff"]
+    check_graded_kickoffs(champ_grad, actual, errs)
     gcols = ["game_id", "home_score", "away_score", "result", "correct", "bet_outcome", "units"]
     merged = champ_pred.merge(champ_grad[gcols], on="game_id", how="left", validate="1:1")
     games = []
@@ -604,10 +608,13 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
         isbet = r["paper_bet"] in ("home", "away")
         settled = isbet and result in ("home", "away", "tie")
         commit, committed_at = commits[int(r["week"])]
+        logged_kick = C.parse_utc(r["kickoff_utc"])
+        actual_kick = actual.get(r["game_id"], logged_kick)   # absent game: schedule_2026 refuses it
         games.append({
             "evaluation": "live_2026", "season": int(r["season"]), "week": int(r["week"]),
             "game_id": r["game_id"], "away": r["away_team"], "home": r["home_team"],
-            "kickoff_utc": r["kickoff_utc"], "model": "champion (LR-tuned, frozen 2026)",
+            "kickoff_utc": C.iso(actual_kick), "kickoff_logged_utc": C.iso(logged_kick),
+            "kickoff_moved": C.kickoff_moved(logged_kick, actual_kick), "model": "champion (LR-tuned, frozen 2026)",
             "model_home_prob": float(r["p_home"]),
             "vegas_implied_home_prob": None if pd.isna(r["implied_p_home"]) else float(r["implied_p_home"]),
             "model_pick": r["pick"],
@@ -661,6 +668,18 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
     }
     check_live(block, graded, predicted, schedule, as_of, metrics["live_2026"], errs)
     return block, games
+
+
+def check_graded_kickoffs(champ_grad: pd.DataFrame, actual: pd.Series, errs: list[str]) -> None:
+    """A final game's graded actual_kickoff_utc must equal the schedule's. Files
+    graded before that column existed have no value and are skipped."""
+    if "actual_kickoff_utc" not in champ_grad:
+        return
+    final = champ_grad[champ_grad["result"].isin(["home", "away", "tie"]) & champ_grad["actual_kickoff_utc"].notna()]
+    for r in final.itertuples(index=False):
+        want = C.iso(actual.get(r.game_id))
+        if r.actual_kickoff_utc != want:
+            errs.append(f"{r.game_id}: graded actual_kickoff_utc {r.actual_kickoff_utc} vs schedule {want}")
 
 
 def amendment6_value_woe(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict:

@@ -359,10 +359,20 @@ class TestCLV(unittest.TestCase):
         self.assertEqual(C.line_move_toward_model(0.50, 0.50, 0.55), 0.0)
 
 
-def _snap(d: Path, ts: str, rows: list[dict]) -> Path:
+def _snap(d: Path, ts: str, rows: list[dict], kickoff: str = "2026-10-04T17:00:00Z") -> Path:
+    """Synthetic schedule snapshot; a row may carry its own UTC ``kickoff`` (else the default)."""
     p = d / f"schedules_2026_{ts}.parquet"
-    pd.DataFrame(rows, columns=["game_id", "home_moneyline", "away_moneyline",
-                                "home_score", "away_score"]).to_parquet(p, index=False)
+    out = []
+    for r in rows:
+        et = pd.Timestamp(r.get("kickoff", kickoff)).tz_convert("America/New_York")
+        out.append({"home_score": np.nan, "away_score": np.nan, "season": 2026, "week": 4, "game_type": "REG",
+                    "gameday": et.strftime("%Y-%m-%d"), "gametime": et.strftime("%H:%M"),
+                    "home_team": "HHH", "away_team": "AAA", "home_rest": 7, "away_rest": 7, "div_game": 0,
+                    "roof": "outdoors", "location": "Home", "stadium_id": "X", **r})
+    cols = ["game_id", "home_moneyline", "away_moneyline", "home_score", "away_score", "season", "week",
+            "game_type", "gameday", "gametime", "home_team", "away_team", "home_rest", "away_rest",
+            "div_game", "roof", "location", "stadium_id"]
+    pd.DataFrame(out, columns=cols).to_parquet(p, index=False)
     return p
 
 
@@ -375,10 +385,11 @@ class TestGrade(unittest.TestCase):
             {"game_id": "thu", "home_moneyline": -300, "away_moneyline": 250}])
         after = _snap(d, "20261006T120000Z", [   # after every kickoff: scores only, never a "late line"
             {"game_id": "sun", "home_moneyline": -1000, "away_moneyline": 700, "home_score": 20, "away_score": 20},
-            {"game_id": "thu", "home_moneyline": -1000, "away_moneyline": 700, "home_score": 27, "away_score": 10},
+            {"game_id": "thu", "home_moneyline": -1000, "away_moneyline": 700, "home_score": 27, "away_score": 10,
+             "kickoff": "2026-10-02T00:15:00Z"},
             {"game_id": "mon", "home_moneyline": -1000, "away_moneyline": 700,
-             "home_score": np.nan, "away_score": np.nan}])
-        base = dict(season=2026, week=4, model="champion", snapshot_file=pred_snap.name,
+             "home_score": np.nan, "away_score": np.nan, "kickoff": "2026-10-06T00:15:00Z"}])
+        base = dict(predicted_at_utc="2026-09-30T15:01:00Z", season=2026, week=4, model="champion", snapshot_file=pred_snap.name,
                     spread_line=3.0, bet_status="official", stake=1.0)
         pred = pd.DataFrame([
             dict(base, game_id="thu", kickoff_utc="2026-10-02T00:15:00Z", p_home=0.60, pick="home",
@@ -415,7 +426,8 @@ class TestGrade(unittest.TestCase):
         # A later snapshot counts only if >= 6 h after the prediction snapshot
         # (and before kickoff); otherwise excluded, never scored as 0.
         line = [{"game_id": "a", "home_moneyline": -150, "away_moneyline": 130}]
-        base = dict(season=2026, week=4, model="champion", game_id="a", kickoff_utc="2026-10-04T17:00:00Z",
+        base = dict(predicted_at_utc="2026-09-30T15:01:00Z",
+                    season=2026, week=4, model="champion", game_id="a", kickoff_utc="2026-10-04T17:00:00Z",
                     p_home=0.6, pick="home", spread_line=3.0, home_moneyline=-120, away_moneyline=100,
                     implied_p_home=0.52, paper_bet="home", bet_price=-120.0, stake=1.0)
         for late_ts, want in [("20260930T150200Z", G.CLV_TOO_SOON),       # 2 minutes later (week 4's case)
@@ -433,11 +445,67 @@ class TestGrade(unittest.TestCase):
             else:
                 self.assertAlmostEqual(g["bet_clv"], (150 / 250) / (150 / 250 + 100 / 230) - 0.52)
 
+    # ---- kickoff moved after prediction (clarification 2026-11-24) ----------
+    EARLY, LATE = "2026-10-04T17:00:00Z", "2026-10-04T20:25:00Z"
+
+    def _moved(self, logged, actual, predicted_at="2026-09-30T15:01:00Z"):
+        """Grade one game; snapshots on Sunday morning and BETWEEN the two kickoffs."""
+        d = _tmpdir(self)
+        line = lambda h, a, **k: [dict(game_id="a", home_moneyline=h, away_moneyline=a, **k)]
+        pred_snap = _snap(d, "20260930T150000Z", line(-120, 100), logged)
+        morning = _snap(d, "20261004T140000Z", line(-150, 130), logged)
+        between = _snap(d, "20261004T190000Z", line(-900, 600), actual)
+        final = _snap(d, "20261006T120000Z", line(-1000, 700, home_score=20, away_score=10), actual)
+        pred = pd.DataFrame([dict(predicted_at_utc=predicted_at, season=2026, week=4, model="champion", game_id="a",
+                                  kickoff_utc=logged, snapshot_file=pred_snap.name, p_home=0.6, pick="home",
+                                  spread_line=3.0, home_moneyline=-120, away_moneyline=100, implied_p_home=0.52,
+                                  paper_bet="home", bet_price=-120.0, stake=1.0)])
+        g = G.grade(pred, [pred_snap, morning, between, final], final, pd.Timestamp("2026-10-06 13:00")).iloc[0]
+        return g, morning, between
+
+    def test_moved_earlier_ignores_snapshot_between_kickoffs(self):
+        g, morning, between = self._moved(self.LATE, self.EARLY)
+        # the trap is real: the logged kickoff alone would have picked `between` (mid-game)
+        self.assertLess(C.parse_utc(self.EARLY), C.snapshot_time(between))
+        self.assertEqual(G.last_prekickoff_snapshot([morning, between], C.parse_utc(self.LATE)), between)
+        self.assertEqual(g["last_prekickoff_snapshot_file"], morning.name)
+        self.assertEqual(g["clv_status"], G.CLV_MEASURED)
+        self.assertAlmostEqual(g["bet_clv"], (150 / 250) / (150 / 250 + 100 / 230) - 0.52)
+        self.assertEqual((g["actual_kickoff_utc"], bool(g["kickoff_moved"])), (self.EARLY, True))
+        self.assertEqual(g["kickoff_utc"], self.LATE)      # the logged value is kept
+
+    def test_moved_later_uses_logged_kickoff(self):
+        g, morning, _ = self._moved(self.EARLY, self.LATE)
+        self.assertEqual(g["last_prekickoff_snapshot_file"], morning.name)
+        self.assertEqual((g["actual_kickoff_utc"], bool(g["kickoff_moved"])), (self.LATE, True))
+
+    def test_unmoved_kickoff(self):
+        g, _, between = self._moved(self.LATE, self.LATE)
+        self.assertEqual(g["last_prekickoff_snapshot_file"], between.name)
+        self.assertEqual((g["actual_kickoff_utc"], bool(g["kickoff_moved"])), (self.LATE, False))
+
+    def test_refuses_prediction_not_before_actual_kickoff(self):
+        for at in (self.EARLY, "2026-10-04T18:00:00Z"):    # exactly at, and after (but before the logged one)
+            with self.assertRaisesRegex(C.GuardError, "not predicted before the actual kickoff"):
+                self._moved(self.LATE, self.EARLY, predicted_at=at)
+        self._moved(self.LATE, self.EARLY, predicted_at="2026-10-04T16:59:59Z")
+
+    def test_game_absent_from_schedule_is_pending(self):
+        d = _tmpdir(self)
+        s = _snap(d, "20260930T150000Z", [{"game_id": "other"}])
+        pred = pd.DataFrame([dict(predicted_at_utc="2026-09-30T15:01:00Z", season=2026, week=4, model="champion",
+                                  game_id="a", kickoff_utc=self.EARLY, snapshot_file=s.name, p_home=0.6, pick="home",
+                                  spread_line=3.0, home_moneyline=-120, away_moneyline=100, implied_p_home=0.52,
+                                  paper_bet="none", bet_price=np.nan, stake=0.0)])
+        g = G.grade(pred, [s], s, pd.Timestamp("2026-10-06")).iloc[0]
+        self.assertEqual((g["result"], g["actual_kickoff_utc"], bool(g["kickoff_moved"])), ("pending", "", False))
+
     def test_log_loss_and_brier(self):
         d = _tmpdir(self)
         s = _snap(d, "20260930T150000Z", [{"game_id": "a", "home_moneyline": -110, "away_moneyline": -110,
                                            "home_score": 10, "away_score": 3}])
-        pred = pd.DataFrame([dict(season=2026, week=4, model="champion", game_id="a", snapshot_file=s.name,
+        pred = pd.DataFrame([dict(predicted_at_utc="2026-09-30T15:01:00Z",
+                                  season=2026, week=4, model="champion", game_id="a", snapshot_file=s.name,
                                   kickoff_utc="2026-10-04T17:00:00Z", p_home=0.8, pick="home", spread_line=1.0,
                                   home_moneyline=-110, away_moneyline=-110, implied_p_home=0.5,
                                   paper_bet="home", bet_price=-110.0, stake=1.0)])
