@@ -1,9 +1,11 @@
 ---
 import Base from '../layouts/Base.astro';
 import Header from './Header.astro';
+import Sections from './Sections.astro';
 import WeekTabs from './WeekTabs.astro';
 import GameCard from './GameCard.astro';
 import Footer from './Footer.astro';
+import { recordText } from '../lib/format.ts';
 import { site } from '../lib/site.ts';
 
 interface Props {
@@ -12,7 +14,7 @@ interface Props {
 const { week } = Astro.props;
 const page = site.pages.get(week);
 if (!page) throw new Error(`no page data for week ${week}`);
-// Week line: starred (★/★★) value calls only, the ones with a card chip (display note, 2026-11-19).
+// Week line: value calls are ★/★★ only, the ones with a card chip (Amendment 8).
 // As on the chips, the ★ is hidden from screen readers, which read "Starred value calls" instead.
 const vc = page.summary?.valueCalls ?? null;
 ---
@@ -21,14 +23,14 @@ const vc = page.summary?.valueCalls ?? null;
   description={`A machine-learning model's straight-up NFL picks and value calls for week ${week} of 2026, next to the Vegas odds.`}
 >
   <div class="wrap">
-    <Header week={week} record={site.record} />
+    <Header title={`Week ${week} · 2026`} record={site.record}><Sections viewed="picks" /></Header>
     <WeekTabs weeks={site.weeks} viewed={week} current={site.current} />
     <main>
       {page.summary && (
         <p class="summary">
           Picks {page.summary.picks.w}–{page.summary.picks.l}{vc && (
             <>
-              {' · '}<span aria-hidden="true">Value calls <span class="stars">★</span></span><span class="sr">Starred value calls</span>{` ${vc.w}–${vc.l}`}{vc.push > 0 && ` (${vc.push} ${vc.push === 1 ? 'push' : 'pushes'})`}
+              {' · '}<span aria-hidden="true">Value calls <span class="stars">★</span></span><span class="sr">Starred value calls</span>{` ${recordText(vc)}`}
             </>
           )}
         </p>

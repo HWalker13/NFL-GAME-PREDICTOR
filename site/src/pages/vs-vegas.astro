@@ -1,0 +1,152 @@
+---
+// How the model compares with Vegas. Every number is the export's (cross-checked in lib/data.ts).
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Sections from '../components/Sections.astro';
+import Footer from '../components/Footer.astro';
+import { STARS, tierLabel } from '../lib/card.ts';
+import { dollars, pct, points2, recordText, signedPct, tierText, woeHeadline } from '../lib/format.ts';
+import { site } from '../lib/site.ts';
+
+const { picks, valueCalls: vc } = site.record;
+const { games, sameWinner, differentWinner: dw, paper } = site.vsVegas;
+const [woeNum, woeWords] = woeHeadline(vc.woe);
+const { clv, verdict } = paper;
+const range = (ci: readonly [number | null, number | null], f: (x: number) => string): string =>
+  ci[0] === null || ci[1] === null ? '' : ` (95% range ${f(ci[0])} to ${f(ci[1])})`;
+const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+---
+<Base
+  title="NFL picks · vs Vegas · 2026"
+  description="How a machine-learning model's 2026 NFL picks, value calls and paper bets compare with Vegas."
+>
+  <div class="wrap">
+    <Header title="vs Vegas · 2026"><Sections viewed="vs-vegas" /></Header>
+    <main>
+      <div class="cards">
+        <section class="panel" id="picks">
+          <h2>Does the model pick winners as well as Vegas?</h2>
+          <dl class="pair">
+            <div><dt>Model</dt><dd>{pct(picks.accuracy)}</dd></div>
+            <div><dt>Vegas favorite</dt><dd>{pct(picks.vegasFavorite)}</dd></div>
+          </dl>
+          <p>
+            Over {games} games with a winner. They picked the same winner in {sameWinner}. In the other {dw.games}, where the model
+            picked a different winner than the Vegas favorite, the model went <strong>{dw.wins}–{dw.losses}</strong>.
+          </p>
+        </section>
+
+        <section class="panel" id="value-calls">
+          <h2>When the model strongly disagrees, is it right?</h2>
+          {vc.w + vc.l > 0 ? (
+            <>
+              <p class="big">{recordText(vc)}</p>
+              <p class="rate">Won {vc.won} · Vegas expected {vc.vegasExpected.toFixed(1)} · {woeNum} {woeWords}</p>
+              <ul class="tiers">
+                {vc.tiers.map((t) => (
+                  <li>
+                    <span class="stars" aria-hidden="true">{STARS[t.tier]}</span>
+                    <span class="sr">{tierLabel(t.tier)}s:</span>
+                    {tierText(t.n, t.woe, t.woePerCall)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p class="rate">None graded yet</p>
+          )}
+          <p>
+            A value call is a team the model rates at least 11 points (★) or 16 points (★★) above Vegas. Most are underdogs, so
+            “Vegas expected” is the fair yardstick, not half. Too few so far to prove anything.
+          </p>
+        </section>
+
+        <section class="panel" id="paper-bets">
+          <h2>Does the model beat the betting market?</h2>
+          <p class="big">{verdict.so_far} <span class="words">{verdict.final ? '' : 'so far'}</span></p>
+          <p class="rate">Final verdict: {verdict.final ? cap(verdict.status) : verdict.status}</p>
+          <dl class="rows">
+            <div><dt>Paper bets</dt><dd>{recordText(paper)}</dd></div>
+            <div><dt>Pretend profit</dt><dd>{dollars(paper.units)} on $1 bets{paper.roi !== null && `, ${signedPct(paper.roi)} per bet${range(paper.roiCi, signedPct)}`}</dd></div>
+            <div><dt>CLV</dt><dd>{clv.mean === null ? 'None measured yet' : `${points2(clv.mean)} points${range(clv.ci, points2)}, ${clv.n} of ${paper.graded} bets measured`}</dd></div>
+            {paper.pending > 0 && <div><dt>Not settled yet</dt><dd>{paper.pending}</dd></div>}
+          </dl>
+          <p>
+            A paper bet is a pretend $1 bet at the real odds on every game where the model and Vegas disagree by 4+ points. CLV
+            (closing line value) is how far Vegas's odds moved toward the bet before kickoff: positive means the market came
+            around to the model. Only CLV counts for the verdict, not the profit.
+          </p>
+        </section>
+      </div>
+
+      <div class="cards two">
+        <section class="panel" id="edge">
+          <h2>What's an edge?</h2>
+          <p>
+            The gap between the model's chance for a team and Vegas's. If the model says 45% and Vegas says 30%, that's a
+            15-point edge. A big edge means a big disagreement. It doesn't mean the model is right.
+          </p>
+        </section>
+        <section class="panel" id="small-samples">
+          <h2>Why small samples mislead</h2>
+          <p>
+            Flip a fair coin 20 times and you'll get 12 or more heads about one time in four. No skill involved. A record built
+            on a few dozen games can look good or bad for the same reason.
+          </p>
+        </section>
+      </div>
+
+      <section class="story" id="how-we-got-here">
+        <h2>How we got here</h2>
+        <p>I started with one rule: a value call was any game where my model and Vegas disagreed by 4+ percentage points. By midseason that was 64% of all games, and if almost everything is a value call, nothing is.</p>
+        <p>My first fix split them into ★ and ★★, but the "rare" ★★ tier ended up bigger than ★. So I flipped the approach: I decided how rare stars should be before looking at how many games each cutoff would star (about 1 in 4 games starred, 1 in 10 double-starred), then let about 800 games from past seasons set the cutoffs at 11 and 16 points, using only the size of the disagreements, not who won. Value calls on this site are now ★/★★ only, and every past week was regraded that way. I made that switch after the tier results were already visible, so I'm saying so here.</p>
+        <p>The original 4-point rule still runs in the background as a pretend $1 bet on every disagreement of 4+ points. It was locked in before the first official pick to test whether the model can beat the betting market, so I left it alone: changing a test midseason makes the test meaningless. Its results are above.</p>
+        <p>I missed part of week 8 and all of week 9 during midterms. Those games were never predicted after kickoff; they're marked as missed.</p>
+      </section>
+    </main>
+    <Footer generatedAt={site.generatedAt} asOf={site.asOf} commit={site.commit} />
+  </div>
+</Base>
+
+<style>
+  .cards { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 4px; }
+  .cards.two { margin-top: 12px; }
+  @media (min-width: 768px) {
+    .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1000px) {
+    .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .panel {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  h2 { margin: 0 0 8px; font-size: 1.0625rem; font-weight: 850; line-height: 1.25; }
+  .panel p { margin: 8px 0 0; font-size: 0.9375rem; }
+  .panel .big { margin: 0; font-size: 1.5rem; font-weight: 850; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .words { font-size: 0.9375rem; font-weight: 700; white-space: nowrap; }
+  .panel .rate { margin-top: 2px; font-weight: 600; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+  .pair dt { color: var(--muted); font-size: 0.875rem; font-weight: 600; }
+  .pair dd { margin: 0; font-size: 1.75rem; font-weight: 850; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .rows { margin: 10px 0 0; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+  .rows div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 8px; padding-block: 5px; border-top: 1px solid var(--line); }
+  .rows dt { color: var(--muted); font-weight: 600; }
+  .rows dd { margin: 0; }
+  .tiers { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+  .tiers li { display: grid; grid-template-columns: 3em 1fr; align-items: baseline; }
+  .stars { color: var(--star); letter-spacing: 0.04em; white-space: nowrap; }
+  .story { max-width: 68ch; margin-top: 28px; }
+  .story p { margin: 0 0 12px; }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>

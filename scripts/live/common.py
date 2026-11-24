@@ -334,22 +334,24 @@ def paper_bet(p_home: float, home_ml: float, away_ml: float,
 
 
 # --------------------------------------------------------------------------- #
-# Display-only views (Amendments 6 and 7). None of these changes a bet, a grade
+# Display-only views (Amendments 6, 7 and 8). None of these changes a bet, a grade
 # or a verdict: the tiers label the bets paper_bet already placed, the toss-up
 # flag labels picks, and WOE is a descriptive sum.
 # --------------------------------------------------------------------------- #
-# Amendment 7 tiers (supersede Amendment 6's two tiers), on the value call's own edge:
-# Lean = [EDGE_THRESHOLD, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above.
+# Amendment 7 tiers (supersede Amendment 6's two tiers), on the paper bet's own edge:
+# "lean" = [EDGE_THRESHOLD, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above.
+# Amendment 8: only the starred tiers are value calls; "lean" is a paper bet only.
 VALUE_TIER_1_EDGE = 0.11
 VALUE_TIER_2_EDGE = 0.16
 VALUE_TIERS = ("lean", "one_star", "two_star")
+STARRED_TIERS = ("one_star", "two_star")
 # Toss-up: the favorite's probability is at most this (the two sides within 10 points).
 TOSS_UP_MAX_FAV = 0.55
 
 
 def value_tier(edge: float) -> str | None:
     """"lean" (edge in [0.04, 0.11)), "one_star" (★, [0.11, 0.16)) or "two_star"
-    (★★, >= 0.16) for a value call's own edge; None if the edge does not
+    (★★, >= 0.16) for a paper bet's own edge; None if the edge does not
     qualify (or is NaN). Compared at EDGE_DECIMALS, exactly like
     ``edge_qualifies``, so an edge of exactly 0.11 on paper is ★ and exactly
     0.16 is ★★ (Amendment 7)."""
@@ -361,6 +363,11 @@ def value_tier(edge: float) -> str | None:
     return "one_star" if e >= VALUE_TIER_1_EDGE else "lean"
 
 
+def is_value_call(edge: float) -> bool:
+    """True when a paper bet with this edge is a value call: ★ or ★★ (Amendment 8)."""
+    return value_tier(edge) in STARRED_TIERS
+
+
 def is_toss_up(p_home: float) -> bool:
     """True when the favorite's probability is <= 0.55 (inclusive), at EDGE_DECIMALS."""
     p = float(p_home)
@@ -368,7 +375,7 @@ def is_toss_up(p_home: float) -> bool:
 
 
 def side_edge(side: str, edge_home: float, edge_away: float) -> float:
-    """The value-call side's own edge."""
+    """The paper-bet side's own edge."""
     return float(edge_home) if side == "home" else float(edge_away)
 
 
@@ -378,7 +385,7 @@ def side_implied(side: str, implied_p_home: float) -> float:
 
 
 def woe_summary(won, implied_side, edge) -> dict:
-    """Wins over expected for graded, non-push value calls (one entry each).
+    """Wins over expected for graded, non-push paper bets (one entry each).
 
     won: 1/0 per call; implied_side: vig-free implied prob of the call's side;
     edge: the call's own edge. ``vegas_expected`` = sum(implied_side),

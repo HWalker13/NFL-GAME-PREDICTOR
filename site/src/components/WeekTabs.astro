@@ -82,5 +82,7 @@ const label = (w: WeekInfo): string => {
     ol { width: 100%; }
     li { flex: 1; }
     .tab { width: 100%; }
+    /* Nothing to scroll in the strip here; without this the page itself opens scrolled past the header. */
+    .tab[aria-current='page'] { scroll-initial-target: none; }
   }
 </style>

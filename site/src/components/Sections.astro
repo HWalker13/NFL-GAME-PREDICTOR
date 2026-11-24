@@ -1,0 +1,29 @@
+---
+/* The two site sections. aria-current is "page" only on the vs Vegas page itself; on a week page the
+   week tab is the current page and "Picks" is the current section ("true"). */
+interface Props {
+  viewed: 'picks' | 'vs-vegas';
+}
+const { viewed } = Astro.props;
+---
+<nav class="sections" aria-label="Sections">
+  <a href="/" aria-current={viewed === 'picks' ? 'true' : undefined}>Picks</a>
+  <a href="/vs-vegas/" aria-current={viewed === 'vs-vegas' ? 'page' : undefined}>vs Vegas</a>
+</nav>
+
+<style>
+  .sections { display: flex; gap: 20px; padding-inline: 4px; border-bottom: 1px solid var(--line); }
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-bottom: -1px;
+    border-bottom: 3px solid transparent;
+    color: var(--muted);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  a:hover { color: var(--text); }
+  a[aria-current] { color: var(--accent); border-bottom-color: var(--accent); }
+</style>

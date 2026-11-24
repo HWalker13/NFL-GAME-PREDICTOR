@@ -22,17 +22,16 @@ const GRADE: Record<Grade, { sr: string; shown: string | null; icon: 'check' | '
 const rows: TeamRow[] = [card.away, card.home];
 const p = (x: number): string => pct(x, card.decimals);
 /*
-  Chips: "Pick: TEAM" always; a value call gets a chip only when starred: "Value call ★: TEAM" /
-  "Value call ★★: TEAM" (Amendment 7). A lean-tier value call is still an official value call, but
-  it is shown only in the details sentence (display note, 2026-11-17). Every chip keeps its ✓/✗/push
-  icon and screen-reader word.
+  Chips: "Pick: TEAM" always; a value call gets a chip, "Value call ★: TEAM" / "Value call ★★: TEAM".
+  Only ★/★★ are value calls (Amendment 8); every other game is an ordinary pick. Every chip keeps
+  its ✓/✗/push icon and screen-reader word.
 */
 interface Chip { label: string; call: Call; stars: string | null; srTier: string | null }
 const chips: Chip[] = [];
 if (card.pick) chips.push({ label: 'Pick', call: card.pick, stars: null, srTier: null });
-const t = card.valueCall?.tier ?? null;
-if (card.valueCall && t !== 'lean') {
-  chips.push({ label: 'Value call', call: card.valueCall, stars: t ? STARS[t] : null, srTier: t ? tierLabel(t) : null });
+if (card.valueCall) {
+  const { tier } = card.valueCall;
+  chips.push({ label: 'Value call', call: card.valueCall, stars: STARS[tier], srTier: tierLabel(tier) });
 }
 // A tied game isn't a push for the straight-up pick; it just reads "Tie".
 const shownWord = (label: string, g: Grade): string | null => (g === 'push' && label === 'Pick' ? 'Tie' : GRADE[g].shown);

@@ -659,33 +659,23 @@ class TestScorecard(unittest.TestCase):
         df["bet_status"] = np.where(df["model"] == "challenger", "official", "hypothetical")
         self.assertIn("**Evidence of an edge**", S.verdict_section(df, True))
 
-    def test_edge_bucket_boundaries(self):
-        self.assertIsNone(S.edge_bucket(0.0399))
-        self.assertEqual(S.edge_bucket(0.04), "[0.04, 0.06)")
-        self.assertEqual(S.edge_bucket(0.0599), "[0.04, 0.06)")
-        self.assertEqual(S.edge_bucket(0.06), "[0.06, 0.08)")
-        self.assertEqual(S.edge_bucket(0.36 - 0.30), "[0.06, 0.08)")     # 0.059999999999999942 in floats
-        self.assertEqual(S.edge_bucket(0.0799), "[0.06, 0.08)")
-        self.assertEqual(S.edge_bucket(0.08), "[0.08+)")
-        self.assertEqual(S.edge_bucket(0.58 - 0.50), "[0.08+)")          # 0.07999999999999996 in floats
-        self.assertEqual(S.edge_bucket(0.25), "[0.08+)")
-        self.assertIsNone(S.edge_bucket(np.nan))
-
-    def test_edge_breakdown_uses_bet_side_edge(self):
+    def test_tier_breakdown_uses_bet_side_edge(self):
+        row = lambda side, e, o, u, clv, model="champion": dict(
+            model=model, paper_bet=side, edge_home=e, edge_away=-e, bet_outcome=o, units=u,
+            clv_status="measured", bet_clv=clv)
         df = pd.DataFrame([
-            dict(model="champion", paper_bet="home", edge_home=0.07, edge_away=-0.07, bet_outcome="win",
-                 units=1.0, clv_status="measured", bet_clv=0.01),
-            dict(model="champion", paper_bet="away", edge_home=-0.09, edge_away=0.09, bet_outcome="loss",
-                 units=-1.0, clv_status="measured", bet_clv=-0.02),
-            dict(model="champion", paper_bet="none", edge_home=0.01, edge_away=-0.01, bet_outcome="none",
-                 units=0.0, clv_status="measured", bet_clv=np.nan),
-        ])
-        t = S.edge_breakdown_table(df).splitlines()
-        row = {ln.split("|")[2].strip(): ln for ln in t if ln.startswith("| champion")}
-        self.assertIn("| 0 | 0-0 (0, 0) |", row["[0.04, 0.06)"])
-        self.assertIn("| 1 | 1-0 (0, 0) | +1.00 |", row["[0.06, 0.08)"])
-        self.assertIn("| 1 | 0-1 (0, 0) | -1.00 |", row["[0.08+)"])
-        self.assertIn("small sample (n<30)", row["[0.08+)"])
+            row("home", 0.07, "win", 1.0, 0.01), row("home", 0.10999999, "loss", -1.0, 0.01),
+            row("away", -(0.61 - 0.50), "loss", -1.0, -0.02),          # 0.10999999999999999 in floats: one-star
+            row("away", -0.16, "win", 2.0, 0.03), row("none", 0.01, "none", 0.0, np.nan),
+            row("home", 0.20, "void", 0.0, 0.0, "challenger")])
+        rows = {tuple(c.strip() for c in ln.split("|")[1:3]): ln for ln in S.tier_breakdown_table(df).splitlines()[2:]}
+        self.assertEqual(len(rows), 6)    # three tiers each for champion and challenger
+        lab = S.TIER_LABEL
+        self.assertIn("| 2 | 1-1 (0, 0) | +0.00 |", rows["champion", lab["lean"]])
+        self.assertIn("| 1 | 0-1 (0, 0) | -1.00 |", rows["champion", lab["one_star"]])
+        self.assertIn("| 1 | 1-0 (0, 0) | +2.00 |", rows["champion", lab["two_star"]])
+        self.assertIn("small sample (n<30)", rows["champion", lab["two_star"]])
+        self.assertIn("| 1 | 0-0 (1, 0) | +0.00 |", rows["challenger", lab["two_star"]])
 
     def test_markdown_renders(self):
         df = _graded(range(4, 6), 0.6, 0.62)
@@ -693,11 +683,15 @@ class TestScorecard(unittest.TestCase):
                               {w: set(g["game_id"]) for w, g in df.groupby("week")}, _sched())
         self.assertIn("## Cumulative -- prediction quality", md)
         self.assertIn("PROVISIONAL", md)
+        self.assertIn("## Paper bets (4-point rule, pre-registered)", md)
+        self.assertIn(S.tier_breakdown_table(df), md)
+        self.assertNotIn("[0.06, 0.08)", md)              # Section 3's buckets are gone (Amendment 8)
+        self.assertNotRegex(md, r"(?i)\blean\b")
         self.assertIn("No graded weeks yet", S.build_markdown(pd.DataFrame(), 2026, 0, "t", False, {}, _sched()))
 
 
 # --------------------------------------------------------------------------- #
-# Amendments 6 and 7: value tiers, toss-ups, wins over expected (display only)
+# Amendments 6-8: value calls, toss-ups, wins over expected (display only)
 # --------------------------------------------------------------------------- #
 class TestAmendment6(unittest.TestCase):
     def test_value_tier_boundaries(self):
@@ -730,6 +724,11 @@ class TestAmendment6(unittest.TestCase):
                     want = name
             self.assertEqual(C.value_tier(e), want, e)
             self.assertEqual(C.value_tier(e) is not None, C.edge_qualifies(e), e)
+
+    def test_is_value_call(self):
+        for e, want in ((np.nan, False), (0.0399, False), (0.04, False), (0.10999999, False), (0.11, True),
+                        (0.61 - 0.50, True), (0.16, True), (0.3, True)):
+            self.assertIs(C.is_value_call(e), want, e)
 
     def test_toss_up_boundaries(self):
         self.assertTrue(C.is_toss_up(0.55))                       # exactly 0.55: toss-up (inclusive)
@@ -775,12 +774,13 @@ class TestAmendment6(unittest.TestCase):
 
     def test_value_woe_rows_per_tier_sum_to_all(self):
         r = S.value_woe_rows(self._calls())
-        self.assertEqual(list(r), ["all", "lean", "one_star", "two_star"])
-        self.assertEqual([r[k]["calls"] for k in r], [5, 2, 1, 2])
+        self.assertEqual(set(r), {"all", "lean", "value_calls", "one_star", "two_star"})
+        order = ("all",) + C.VALUE_TIERS
+        self.assertEqual([r[k]["calls"] for k in order], [5, 2, 1, 2])
         self.assertEqual((r["lean"]["wins"], r["lean"]["losses"]), (1, 1))
         self.assertEqual((r["one_star"]["wins"], r["one_star"]["losses"]), (1, 0))
         self.assertEqual((r["two_star"]["losses"], r["two_star"]["pushes"]), (1, 1))
-        self.assertEqual([r[k]["n"] for k in r], [4, 2, 1, 1])                   # the push is excluded
+        self.assertEqual([r[k]["n"] for k in order], [4, 2, 1, 1])                   # the push is excluded
         # vegas expected: Lean home 0.50 + away side of 0.80 = 0.20; one-star home 0.30;
         # two-star away side of 0.40 = 0.60
         self.assertAlmostEqual(r["lean"]["vegas_expected"], 0.70)
@@ -791,17 +791,21 @@ class TestAmendment6(unittest.TestCase):
             self.assertEqual(sum(r[k][f] for k in C.VALUE_TIERS), r["all"][f], f)
         for f in ("vegas_expected", "model_expected", "woe"):
             self.assertAlmostEqual(sum(r[k][f] for k in C.VALUE_TIERS), r["all"][f], msg=f)
+        # Amendment 8: value calls = one-star + two-star; + non-starred = every paper bet
+        for f in ("calls", "wins", "losses", "pushes", "n", "won", "vegas_expected", "model_expected", "woe"):
+            self.assertAlmostEqual(sum(r[k][f] for k in C.STARRED_TIERS), r["value_calls"][f], msg=f)
+            self.assertAlmostEqual(r["value_calls"][f] + r["lean"][f], r["all"][f], msg=f)
         self.assertAlmostEqual(r["all"]["model_expected"], 0.05 + 0.17 + 0.11 + 0.1099)
         t = S.value_woe_table(self._calls())
-        self.assertIn("| Lean edge [0.04, 0.11) | 2 | 1-1 (0, 0) | 2 | 1 | 0.700 | 0.160 | +0.300 | +0.1500 | +0.0799 |", t)   # (0.05 + 0.1099) / 2
-        self.assertIn("| ★ edge [0.11, 0.16) | 1 | 1-0 (0, 0) | 1 | 1 | 0.300 | 0.110 | +0.700 | +0.7000 | +0.1100 |", t)
-        self.assertIn("| ★★ edge [0.16+) | 2 | 0-1 (1, 0) | 1 | 0 | 0.600 | 0.170 | -0.600 | -0.6000 | +0.1700 |", t)
+        self.assertIn("| Non-starred [0.04, 0.11) | 2 | 1-1 (0, 0) | 2 | 1 | 0.700 | 0.160 | +0.300 | +0.1500 | +0.0799 |", t)   # (0.05 + 0.1099) / 2
+        self.assertIn("| ★ [0.11, 0.16) | 1 | 1-0 (0, 0) | 1 | 1 | 0.300 | 0.110 | +0.700 | +0.7000 | +0.1100 |", t)
+        self.assertIn("| ★★ [0.16+) | 2 | 0-1 (1, 0) | 1 | 0 | 0.600 | 0.170 | -0.600 | -0.6000 | +0.1700 |", t)
 
     def test_official_call_without_tier_refuses(self):
         df = self._calls()
         df.loc[0, "edge_home"] = 0.03   # an "official" call below the bet threshold has no tier
         with self.assertRaises(ValueError):
-            S.official_value_calls(df)
+            S.official_paper_bets(df)
 
     def test_confidence_rows(self):
         df = pd.DataFrame([dict(model="champion", p_home=p, result=r, correct=c) for p, r, c in (
@@ -818,7 +822,7 @@ class TestAmendment6(unittest.TestCase):
         df = _graded(range(4, 6), 0.6, 0.62)
         md = S.build_markdown(df, 2026, 2, "2026-10-13T00:00:00Z", False,
                               {w: set(g["game_id"]) for w, g in df.groupby("week")}, _sched())
-        self.assertIn("## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)", md)
+        self.assertIn("## Value calls (★ and ★★), wins over expected, and toss-ups (DESCRIPTIVE ONLY)", md)
         self.assertIn(S.amendment6_section(df), md)
 
 

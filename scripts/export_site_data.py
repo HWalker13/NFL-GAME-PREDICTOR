@@ -54,7 +54,7 @@ from scripts.live import common as C
 from scripts.live import scorecard as SC
 
 ROOT = C.PROJECT_ROOT
-SCHEMA_VERSION = "1.4.1"
+SCHEMA_VERSION = "1.5.0"
 EXPORT_DIR = ROOT / "exports"
 OUT_PATH = EXPORT_DIR / "site_data.json"
 METRICS_PATH = ROOT / "audit" / "out" / "metrics.json"
@@ -104,6 +104,12 @@ DEFINITIONS = {
     "bet_rule": "Bet 1 paper unit on a team when the model gives it at least 4 percentage points more "
                 "chance to win than the market does (after removing the bookmaker's margin), at that "
                 "team's listed odds. Otherwise no bet. Ties are refunded.",
+    "paper_bet": "A pretend 1-unit bet placed by the bet rule on every disagreement of 4 or more percentage "
+                 "points. It was fixed before the first official pick, to test whether the model can beat "
+                 "the betting market.",
+    "value_call": "A paper bet where the model's chance is at least 11 percentage points above the market's "
+                  "(one star), or at least 16 (two stars). A label for the largest disagreements; smaller "
+                  "paper bets are not value calls.",
     "ci95": "95% confidence interval: the range the true value plausibly lies in given how few games "
             "there are. Rates use the Wilson interval; averages (log loss, Brier, ROI, CLV) use a "
             "t-interval.",
@@ -634,8 +640,23 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
             "prediction_committed_at_kind": "local git author timestamp (not proof of push time)",
         })
 
-    # ---- Amendments 6 and 7 (descriptive only): tiers, WOE, toss-ups ----------
-    value_woe = amendment6_value_woe(graded, champ_pred)
+    # ---- Amendments 6-8 (descriptive only): value calls, WOE, toss-ups --------
+    tier_rows = tier_woe(graded, champ_pred)
+    value_calls = {**tier_rows["value_calls"], "tiers": {k: tier_rows[k] for k in C.STARRED_TIERS}}
+    value_calls["record"] = f"{value_calls['wins']}-{value_calls['losses']}-{value_calls['pushes']}"
+    allb = tier_rows["all"]
+    paper_bets = {
+        "label": "Paper bets (4-point rule, pre-registered)",
+        "edge_threshold": C.EDGE_THRESHOLD,
+        "logged": allb["logged"], "graded": allb["graded"], "pending": allb["logged"] - allb["n"] - allb["pushes"],
+        "wins": official["wins"], "losses": official["losses"], "pushes": official["voids"],
+        "record": official["record"], "units": official["units"], "roi": official["roi"],
+        "roi_ci95": official["roi_ci95"], "clv": official["clv"],
+        "wins_over_expected": allb, "non_starred": tier_rows["lean"],
+        "verdict": {"status": "decided" if complete else "decided after week 18", "final": complete,
+                    "so_far": verdict["verdict"]},
+    }
+    picks_vs_vegas = picks_vs_vegas_block(graded)
     by_conf = amendment6_confidence(graded, champ_pred)
 
     champ_all = graded[graded["model"] == "champion"]
@@ -647,11 +668,13 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
         "value_tier_one_star_edge": C.VALUE_TIER_1_EDGE,
         "value_tier_two_star_edge": C.VALUE_TIER_2_EDGE,
         "toss_up_threshold": C.TOSS_UP_MAX_FAV,
-        "value_woe": value_woe,
+        "value_calls": value_calls,
+        "paper_bets": paper_bets,
+        "picks_vs_vegas": picks_vs_vegas,
         "prediction_quality_by_confidence": by_conf,
-        "amendment_6_note": "Value tiers, wins over expected and the toss-up flag are descriptive only "
-                            "(docs/PHASE10_PREREG.md Amendments 6 and 7). They change no bet, grade or "
-                            "verdict; the season-end verdict rests on CLV alone.",
+        "amendment_6_note": "Value calls (★/★★), wins over expected and the toss-up flag are descriptive only "
+                            "(docs/PHASE10_PREREG.md Amendments 6, 7 and 8). They change no bet, grade or "
+                            "verdict; the season-end verdict rests on the CLV of all official paper bets.",
         "games_logged": int(len(champ_pred)), "games_graded": int(len(champ_all)),
         "games_decided": int(SC.decided(champ_all).shape[0]),
         "ties": int((champ_all["result"] == "tie").sum()),
@@ -667,6 +690,7 @@ def live(errs: list[str], metrics: dict) -> tuple[dict, list[dict]]:
                            "week's prediction file. The owner's computer sets it, so it is not proof of push time.",
     }
     check_live(block, graded, predicted, schedule, as_of, metrics["live_2026"], errs)
+    check_amendment8(block, games, errs)
     return block, games
 
 
@@ -682,22 +706,94 @@ def check_graded_kickoffs(champ_grad: pd.DataFrame, actual: pd.Series, errs: lis
             errs.append(f"{r.game_id}: graded actual_kickoff_utc {r.actual_kickoff_utc} vs schedule {want}")
 
 
-def amendment6_value_woe(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict:
-    """Per tier: the scorecard's own value_woe_rows (graded files) plus ``calls_logged``,
-    the official value calls in the prediction files (pending ones included)."""
+def tier_woe(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict:
+    """Per SC.TIER_KEYS: the scorecard's own value_woe_rows (graded files) plus ``logged``,
+    the official paper bets in the prediction files (pending ones included)."""
     rows = SC.value_woe_rows(graded)
     logged = champ_pred[champ_pred["paper_bet"].isin(["home", "away"]) & (champ_pred["bet_status"] == "official")]
-    tiers = [C.value_tier(C.side_edge(s, h, a))
-             for s, h, a in zip(logged["paper_bet"], logged["edge_home"], logged["edge_away"])]
+    edges = [C.side_edge(s, h, a) for s, h, a in zip(logged["paper_bet"], logged["edge_home"], logged["edge_away"])]
     out = {}
     for key, r in rows.items():
-        n_logged = len(tiers) if key == "all" else sum(t == key for t in tiers)
+        n_logged = {"all": len(edges), "value_calls": sum(C.is_value_call(e) for e in edges)}.get(
+            key, sum(C.value_tier(e) == key for e in edges))
         out[key] = {
-            "calls_logged": int(n_logged), "calls_graded": r["calls"], "wins": r["wins"], "losses": r["losses"],
+            "logged": int(n_logged), "graded": r["calls"], "wins": r["wins"], "losses": r["losses"],
             "pushes": r["pushes"], "n": r["n"], "won": r["won"], "vegas_expected": r["vegas_expected"],
             "model_expected": r["model_expected"], "woe": r["woe"], "woe_per_call": r["woe_per_call"],
             "model_expected_per_call": r["model_expected_per_call"]}
     return out
+
+
+def picks_vs_vegas_block(graded: pd.DataFrame) -> dict:
+    """Champion picks next to the Vegas favorite (prediction snapshot) on decided games.
+    ``different_winner`` = games where the model picked the team the spread did not favor;
+    games with no favorite (``vegas_fav`` unresolved) are counted apart."""
+    d = SC.decided(graded[graded["model"] == "champion"])
+    has = d[d["vegas_fav"].isin(["home", "away"])]
+    diff = has[has["pick"] != has["vegas_fav"]]
+    w = int(diff["correct"].sum())
+    return {"games": int(len(d)), "model": rate(int(d["correct"].sum()), len(d)),
+            "vegas_favorite": rate(int(has["vegas_correct"].sum()), len(has)),
+            "no_favorite": int(len(d) - len(has)), "same_winner": int(len(has) - len(diff)),
+            "different_winner": {"games": int(len(diff)), "wins": w, "losses": int(len(diff) - w)}}
+
+
+def check_amendment8(block: dict, games: list[dict], errs: list[str]) -> None:
+    """Starred + non-starred == official record exactly; paper_bets == official_bets (itself
+    checked against the scorecard); every count reconciles with the per-game data."""
+    vc, pb, ob, pv = block["value_calls"], block["paper_bets"], block["official_bets"], block["picks_vs_vegas"]
+    non, stars = pb["non_starred"], vc["tiers"]
+    if set(stars) != set(C.STARRED_TIERS):
+        errs.append(f"value_calls tiers {sorted(stars)} != {list(C.STARRED_TIERS)}")
+        return
+    ints = ("logged", "graded", "wins", "losses", "pushes", "n", "won")
+    floats = ("vegas_expected", "model_expected", "woe")
+    for f in ints + floats:
+        if abs(sum(t[f] for t in stars.values()) - vc[f]) > 1e-9:
+            errs.append(f"value_calls tiers' {f} do not sum to value_calls")
+        if abs(vc[f] + non[f] - pb["wins_over_expected"][f]) > 1e-9:
+            errs.append(f"value calls + non-starred {f} != all paper bets")
+    if (vc["wins"] + non["wins"], vc["losses"] + non["losses"], vc["pushes"] + non["pushes"],
+            vc["graded"] + non["graded"]) != (ob["wins"], ob["losses"], ob["voids"], ob["bets"]):
+        errs.append(f"value calls {vc['record']} + non-starred != official record {ob['record']}")
+    for f, g in (("wins", "wins"), ("losses", "losses"), ("pushes", "voids"), ("record", "record"),
+                 ("units", "units"), ("roi", "roi"), ("roi_ci95", "roi_ci95"), ("clv", "clv"), ("graded", "bets")):
+        if pb[f] != ob[g]:
+            errs.append(f"paper_bets {f} {pb[f]!r} != official_bets {g} {ob[g]!r}")
+    if (pb["verdict"]["so_far"], pb["verdict"]["final"]) != (block["clv_verdict"]["verdict"], block["clv_verdict"]["final"]):
+        errs.append("paper_bets verdict != clv_verdict")
+    # per-game data
+    res = lambda g: None if g["result"] == "pending" else "push" if g["result"] == "tie" else \
+        "win" if g["bet_side"] == g["result"] else "loss"
+    for name, b, tiers in (("paper_bets", pb, C.VALUE_TIERS),
+                           ("value_calls", vc, C.STARRED_TIERS), ("non_starred", non, ("lean",)),
+                           *((k, stars[k], (k,)) for k in C.STARRED_TIERS)):
+        gs = [g for g in games if g["bet"] and g["bet_status"] == "official" and g["value_tier"] in tiers]
+        out = [res(g) for g in gs]
+        mine = (len(gs), out.count("win"), out.count("loss"), out.count("push"))
+        if mine != (b["logged"], b["wins"], b["losses"], b["pushes"]):
+            errs.append(f"{name}: per-game (logged, W, L, P) {mine} vs block {b['logged'], b['wins'], b['losses'], b['pushes']}")
+    units = sum(g["bet_units"] for g in games if g["bet_units"] is not None)
+    if abs(units - pb["units"]) > 1e-6:
+        errs.append(f"paper_bets units {pb['units']} vs per-game {units}")
+    dec = [g for g in games if g["result"] in ("home", "away")]
+    fav = [g for g in dec if g["vegas_favorite"] in ("home", "away")]
+    diff = [g for g in fav if g["model_pick"] != g["vegas_favorite"]]
+    w = sum(g["pick_correct"] for g in diff)
+    if (len(dec), sum(g["pick_correct"] for g in dec), len(fav), sum(g["vegas_favorite"] == g["result"] for g in fav),
+            len(dec) - len(fav), len(fav) - len(diff), len(diff), w, len(diff) - w) != \
+            (pv["games"], pv["model"]["k"], pv["vegas_favorite"]["n"], pv["vegas_favorite"]["k"], pv["no_favorite"],
+             pv["same_winner"], pv["different_winner"]["games"], pv["different_winner"]["wins"],
+             pv["different_winner"]["losses"]):
+        errs.append(f"picks_vs_vegas {pv} does not reconcile with the per-game data")
+    # on games with a favorite, the accuracy gap is exactly the different-winner W - L
+    if sum(g["pick_correct"] for g in fav) - pv["vegas_favorite"]["k"] != \
+            pv["different_winner"]["wins"] - pv["different_winner"]["losses"]:
+        errs.append("picks_vs_vegas: accuracy gap != different-winner wins - losses")
+    q = block["prediction_quality"]
+    for mine, theirs in ((pv["model"], q["champion"]["accuracy"]), (pv["vegas_favorite"], q["vegas_favorite"]["accuracy"])):
+        if (mine["k"], mine["n"]) != (theirs["k"], theirs["n"]):
+            errs.append(f"picks_vs_vegas {mine} != prediction_quality {theirs}")
 
 
 def amendment6_confidence(graded: pd.DataFrame, champ_pred: pd.DataFrame) -> dict:
@@ -788,6 +884,7 @@ def check_live(block: dict, graded: pd.DataFrame, predicted: dict, schedule: pd.
     for name, sec in (("prediction table", SC.predictor_table(graded)), ("betting table", SC.betting_table(graded)),
                       ("verdict", SC.verdict_section(graded, block["clv_verdict"]["final"])),
                       ("checkpoint", SC.checkpoint_section(graded, predicted, schedule, as_of)),
+                      ("tier table", SC.tier_breakdown_table(graded)),
                       ("Amendment 6 section", SC.amendment6_section(graded))):
         if sec not in text:
             errs.append(f"SCORECARD_2026.md {name} does not match the graded files (regenerate the scorecard?)")
@@ -839,37 +936,27 @@ def check_live(block: dict, graded: pd.DataFrame, predicted: dict, schedule: pd.
     if sc["checkpoint"]["nums"] != mine or sc["checkpoint"]["n"] != cp["paired_games"] \
             or sc["checkpoint"]["decision"] != cp["decision"]:
         errs.append(f"checkpoint: export {mine, cp['paired_games'], cp['decision']} vs scorecard {sc['checkpoint']}")
-    # 2b) Amendments 6/7: exported values == the scorecard's cells (every row present, no extra
-    #     rows); the three tiers add up to the overall figures and to the official record.
-    vw = block["value_woe"]
+    # 2b) Amendments 6-8: exported values == the scorecard's cells (every row present, no extra
+    #     rows). check_amendment8 checks that the tiers add up to the official record.
+    vw = {"all": block["paper_bets"]["wins_over_expected"], "lean": block["paper_bets"]["non_starred"],
+          "value_calls": block["value_calls"], **block["value_calls"]["tiers"]}
     for key, b in vw.items():
         s = sc["value_woe"].get(key)
         if s is None:
-            errs.append(f"scorecard value-tier row {key} missing"); continue
+            errs.append(f"scorecard tier row {key} missing"); continue
         sgn3 = (lambda x: f"{x:+.3f}") if b["n"] else (lambda x: "–")
         sgn4 = (lambda x: f"{x:+.4f}") if b["n"] else (lambda x: "–")
-        mine = {"calls": str(b["calls_graded"]),
+        mine = {"calls": str(b["graded"]),
                 "wlpp": (str(b["wins"]), str(b["losses"]), str(b["pushes"]),
-                         str(b["calls_graded"] - b["wins"] - b["losses"] - b["pushes"])),
+                         str(b["graded"] - b["wins"] - b["losses"] - b["pushes"])),
                 "n": str(b["n"]), "won": str(b["won"]), "vegas_expected": f3(b["vegas_expected"]),
                 "model_expected": f3(b["model_expected"]), "woe": sgn3(b["woe"]),
                 "woe_per_call": sgn4(b["woe_per_call"]), "model_expected_per_call": sgn4(b["model_expected_per_call"])}
         for k, v in mine.items():
             if s[k] != v:
-                errs.append(f"live value_woe {key} {k}: export {v} vs scorecard {s[k]}")
+                errs.append(f"live tier {key} {k}: export {v} vs scorecard {s[k]}")
     if set(vw) != set(SC.TIER_KEYS) or set(sc["value_woe"]) != set(SC.TIER_KEYS):
-        errs.append(f"value_woe keys {sorted(vw)} / scorecard rows {sorted(sc['value_woe'])} != {list(SC.TIER_KEYS)}")
-    tiers = tuple(vw[k] for k in C.VALUE_TIERS if k in vw)
-    for f in ("calls_logged", "calls_graded", "wins", "losses", "pushes", "n", "won"):
-        if sum(t[f] for t in tiers) != vw["all"][f]:
-            errs.append(f"value_woe tiers' {f} do not sum to the overall {f}")
-    for f in ("vegas_expected", "model_expected", "woe"):
-        if abs(sum(t[f] for t in tiers) - vw["all"][f]) > 1e-9:
-            errs.append(f"value_woe tiers' {f} do not sum to the overall {f}")
-    ob = block["official_bets"]
-    if (vw["all"]["wins"], vw["all"]["losses"], vw["all"]["pushes"], vw["all"]["calls_graded"]) != \
-            (ob["wins"], ob["losses"], ob["voids"], ob["bets"]):
-        errs.append(f"value_woe overall record {vw['all']} != official bets {ob['record']}")
+        errs.append(f"tier keys {sorted(vw)} / scorecard rows {sorted(sc['value_woe'])} != {list(SC.TIER_KEYS)}")
     for key, b in block["prediction_quality_by_confidence"].items():
         a, s = b["accuracy"], sc["confidence"].get(key)
         mine = (str(a["k"]), str(a["n"]), f3(a["value"]), f3(a["ci95"][0]), f3(a["ci95"][1])) if a["n"] else None

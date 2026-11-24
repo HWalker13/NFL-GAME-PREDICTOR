@@ -7,7 +7,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseSiteData, type Game, type ScheduleGame, type SiteData } from './schema.ts';
-import { buildCard, tierOf, TIERS, type Card, type Grade, type Tier } from './card.ts';
+import { buildCard, STAR_TIERS, tierOf, TIERS, type Card, type Grade, type StarTier, type Tier } from './card.ts';
 import { WEEKS, currentWeek, weekBanner, weekInfo, type WeekInfo } from './season.ts';
 
 export function dataPath(): string {
@@ -29,9 +29,8 @@ export interface WeekPage {
   banner: string | null;
   cards: Card[];
   /**
-   * Graded picks and starred (★/★★) value calls this week; null when nothing this week is graded yet.
-   * Lean-tier calls have no card chip, so the week line leaves them out (display note, 2026-11-19);
-   * valueCalls is null when the week has no graded starred call. The season header still counts all.
+   * Graded picks and value calls (★/★★) this week; null when nothing this week is graded yet.
+   * valueCalls is null when the week has no graded value call.
    */
   summary: { picks: Tally; valueCalls: Tally | null } | null;
 }
@@ -42,11 +41,11 @@ export interface Tally {
   push: number;
 }
 
-/** Value calls tallied from the cards (the site's own count, used to cross-check the export). */
-export interface ValueCallStats extends Tally {
-  /** Value calls on the cards, open ones included. */
-  calls: number;
-  /** Sum of Vegas's no-vig probability for the call side over graded calls, pushes excluded (4 dp inputs). */
+/** Paper bets tallied from the cards (the site's own count, used to cross-check the export). */
+export interface BetStats extends Tally {
+  /** Paper bets on the cards, open ones included. */
+  logged: number;
+  /** Sum of Vegas's no-vig probability for the bet side over graded bets, pushes excluded (4 dp inputs). */
   vegasSum: number;
 }
 
@@ -56,70 +55,93 @@ const tally = (grades: Grade[]): Tally => ({
   push: grades.filter((g) => g === 'push').length,
 });
 
-/** Value-call record and "Vegas expected" sum from the cards; `tier` limits it to one tier. */
-export function valueCallStats(cards: readonly Card[], tier?: Tier): ValueCallStats {
-  const calls = cards.flatMap((c) => (c.valueCall && (tier === undefined || c.valueCall.tier === tier) ? [c.valueCall] : []));
-  const decided = calls.filter((v) => v.grade === 'win' || v.grade === 'loss');
+/** Record and "Vegas expected" sum from the cards' paper bets; `tiers` limits it. Starred tiers = value calls. */
+export function betStats(cards: readonly Card[], tiers?: readonly Tier[]): BetStats {
+  const bets = cards.flatMap((c) => (c.paperBet && (!tiers || (c.paperBet.tier !== null && tiers.includes(c.paperBet.tier))) ? [c.paperBet] : []));
+  const decided = bets.filter((v) => v.grade === 'win' || v.grade === 'loss');
   return {
-    ...tally(calls.map((v) => v.grade)),
-    calls: calls.length,
+    ...tally(bets.map((v) => v.grade)),
+    logged: bets.length,
     vegasSum: decided.reduce((a, v) => a + v.vegasProb, 0),
   };
 }
 
-/** One value tier as the header shows it (numbers from the export's value_woe). */
+/** One value tier as the header shows it (numbers from the export's value_calls). */
 export interface TierLine {
-  tier: Tier;
+  tier: StarTier;
   /** Graded calls, pushes excluded: the calls WOE is over. */
   n: number;
   woe: number;
   woePerCall: number | null;
 }
 
-/** The value tile: counts only (Amendments 6 and 7). WOE numbers are the exporter's. */
+/** Value calls, ★/★★ only (Amendment 8). WOE numbers are the exporter's. */
 export interface ValueRecord extends Tally {
   won: number;
   vegasExpected: number;
   woe: number;
-  /** Lean, ★, ★★, in that order. */
+  /** ★, ★★, in that order. */
   tiers: TierLine[];
 }
 
 /**
- * Fails the build unless the export's Amendment 6/7 numbers agree with the cards: for all calls and
- * for each of the three tiers (Lean, ★, ★★), call counts and W-L-push equal value_woe; the site's own
- * Vegas-expected sums (from 4 dp probabilities) are within rounding of the exporter's; the three
- * tiers add up to all calls and to the official record; the toss-up / confident pick records equal
- * prediction_quality_by_confidence; and each per-game flag agrees with a recomputation from the 4 dp
- * probabilities wherever that recomputation is clear of the cutoffs.
+ * Fails the build unless the export's Amendment 6-8 numbers agree with the cards: for all paper bets,
+ * the non-starred ones, the value calls and each star tier, counts and W-L-push equal the export's;
+ * the site's own Vegas-expected sums (from 4 dp probabilities) are within rounding; ★ + ★★ = value
+ * calls, and value calls + non-starred = the official record, pushes included; the paper-bet record
+ * equals official_bets; the picks-vs-Vegas counts equal a recount from the games; the toss-up /
+ * confident pick records equal prediction_quality_by_confidence; and each per-game flag agrees with
+ * a recomputation from the 4 dp probabilities wherever that recomputation is clear of the cutoffs.
  */
-export function crossCheckAmendment6(d: SiteData, cards: readonly Card[]): void {
+export function crossCheckAmendments(d: SiteData, cards: readonly Card[]): void {
   const errors: string[] = [];
   const L = d.live_2026;
-  const vw = L.value_woe;
-  const blocks = [['all', undefined], ...TIERS.map((t) => [t, t] as const)] as const;
-  for (const [key, tier] of blocks) {
-    const site = valueCallStats(cards, tier);
-    const e = vw[key];
-    if (site.calls !== e.calls_logged || site.w !== e.wins || site.l !== e.losses || site.push !== e.pushes) {
-      errors.push(`${key}: site ${site.calls} calls ${site.w}-${site.l}-${site.push}, export ${e.calls_logged} calls ${e.wins}-${e.losses}-${e.pushes}`);
+  const vc = L.value_calls;
+  const pb = L.paper_bets;
+  const all = pb.wins_over_expected;
+  const non = pb.non_starred;
+  const groups: [string, readonly Tier[], typeof all][] = [
+    ['paper_bets', TIERS, all],
+    ['non_starred', ['lean'], non],
+    ['value_calls', STAR_TIERS, vc],
+    ['one_star', ['one_star'], vc.tiers.one_star],
+    ['two_star', ['two_star'], vc.tiers.two_star],
+  ];
+  for (const [key, tiers, e] of groups) {
+    const site = betStats(cards, tiers);
+    if (site.logged !== e.logged || site.w !== e.wins || site.l !== e.losses || site.push !== e.pushes) {
+      errors.push(`${key}: site ${site.logged} logged ${site.w}-${site.l}-${site.push}, export ${e.logged} logged ${e.wins}-${e.losses}-${e.pushes}`);
     }
     if (e.n !== e.wins + e.losses || e.won !== e.wins) errors.push(`${key}: export n/won inconsistent with its record`);
     if (Math.abs(site.vegasSum - e.vegas_expected) > e.n * 1e-4 + 2e-4) {
       errors.push(`${key}: site Vegas expected ${site.vegasSum.toFixed(4)} vs export ${e.vegas_expected}`);
     }
   }
-  for (const f of ['calls_logged', 'wins', 'losses', 'pushes', 'n', 'won'] as const) {
-    const sum = TIERS.reduce((a, t) => a + vw[t][f], 0);
-    if (sum !== vw.all[f]) errors.push(`tiers' ${f} sum to ${sum}, all calls have ${vw.all[f]}`);
+  const { one_star, two_star } = vc.tiers;
+  for (const f of ['logged', 'graded', 'wins', 'losses', 'pushes', 'n', 'won'] as const) {
+    if (one_star[f] + two_star[f] !== vc[f]) errors.push(`star tiers' ${f} do not sum to value_calls`);
+    if (vc[f] + non[f] !== all[f]) errors.push(`value calls + non-starred ${f} != all paper bets`);
   }
   for (const f of ['vegas_expected', 'woe'] as const) {
-    const sum = TIERS.reduce((a, t) => a + vw[t][f], 0);
-    if (Math.abs(sum - vw.all[f]) > 2.5e-4) errors.push(`tiers' ${f} sum to ${sum.toFixed(4)}, all calls have ${vw.all[f]}`);
+    if (Math.abs(one_star[f] + two_star[f] - vc[f]) > 2.5e-4) errors.push(`star tiers' ${f} do not sum to value_calls`);
+    if (Math.abs(vc[f] + non[f] - all[f]) > 2.5e-4) errors.push(`value calls + non-starred ${f} != all paper bets`);
   }
   const o = L.official_bets;
-  if (vw.all.wins !== o.wins || vw.all.losses !== o.losses || vw.all.pushes !== o.voids) {
-    errors.push(`value_woe.all ${vw.all.wins}-${vw.all.losses}-${vw.all.pushes} != official ${o.wins}-${o.losses}-${o.voids}`);
+  const recs = [[pb.wins, pb.losses, pb.pushes], [all.wins, all.losses, all.pushes], [vc.wins + non.wins, vc.losses + non.losses, vc.pushes + non.pushes]];
+  if (recs.some((r) => r.join('-') !== `${o.wins}-${o.losses}-${o.voids}`)) {
+    errors.push(`paper-bet records ${recs.map((r) => r.join('-')).join(', ')} != official ${o.wins}-${o.losses}-${o.voids}`);
+  }
+  const pv = L.picks_vs_vegas;
+  const decided = d.games.filter((g) => g.evaluation === 'live_2026' && g.pick_correct !== null);
+  const diff = decided.filter((g) => g.vegas_favorite !== 'unresolved' && g.vegas_favorite !== g.model_pick);
+  const right = diff.filter((g) => g.pick_correct).length;
+  const dw = pv.different_winner;
+  if (decided.length !== pv.games || diff.length !== dw.games || right !== dw.wins || diff.length - right !== dw.losses) {
+    errors.push(`picks_vs_vegas: ${right}-${diff.length - right} of ${diff.length} in the games, export ${dw.wins}-${dw.losses} of ${dw.games}`);
+  }
+  const q = L.prediction_quality;
+  if (pv.model.k !== q.champion.accuracy.k || pv.model.n !== q.champion.accuracy.n || pv.vegas_favorite.k !== q.vegas_favorite.accuracy.k || pv.vegas_favorite.n !== q.vegas_favorite.accuracy.n) {
+    errors.push('picks_vs_vegas accuracies != prediction_quality');
   }
   const conf = L.prediction_quality_by_confidence;
   const withPick = cards.filter((c) => c.pick);
@@ -136,36 +158,36 @@ export function crossCheckAmendment6(d: SiteData, cards: readonly Card[]): void 
     if (Math.abs(fav - L.toss_up_threshold) > 1e-4 && c.tossUp !== fav <= L.toss_up_threshold) {
       errors.push(`${c.gameId}: toss_up ${c.tossUp} but the model favorite is ${fav}`);
     }
-    const v = c.valueCall;
+    const v = c.paperBet;
     if (v) {
       const edge = v.modelProb - v.vegasProb;
       const clear = [L.value_tier_one_star_edge, L.value_tier_two_star_edge].every((x) => Math.abs(edge - x) > 2e-4);
-      if (v.tier === null) errors.push(`${c.gameId}: value call without a tier`);
+      if (v.tier === null) errors.push(`${c.gameId}: paper bet without a tier`);
       else if (clear && v.tier !== tierOf(edge, L.value_tier_one_star_edge, L.value_tier_two_star_edge)) {
         errors.push(`${c.gameId}: tier ${v.tier} but the edge is ${edge.toFixed(4)}`);
       }
     }
   }
-  if (errors.length) throw new Error(`tiers / toss-ups disagree with the exporter:\n  ${errors.join('\n  ')}`);
+  if (errors.length) throw new Error(`tiers / paper bets / toss-ups disagree with the exporter:\n  ${errors.join('\n  ')}`);
 }
 
 /**
- * Fails the build unless the site's value calls are the exporter's official paper record: same
+ * Fails the build unless the site's paper bets are the exporter's official paper record: same
  * games, same side, and the same graded W-L-push as live_2026.official_bets.
  */
-export function crossCheckValueCalls(d: SiteData, cards: ReadonlyMap<string, Card>, stats: Tally): void {
+export function crossCheckPaperBets(d: SiteData, cards: ReadonlyMap<string, Card>, stats: Tally): void {
   const errors: string[] = [];
   for (const g of d.games) {
     if (g.evaluation !== 'live_2026') continue;
-    const v = cards.get(g.game_id)?.valueCall ?? null;
+    const v = cards.get(g.game_id)?.paperBet ?? null;
     const want = g.bet ? g.bet_side : null;
-    if ((v?.side ?? null) !== want) errors.push(`${g.game_id}: site value call ${v?.side ?? 'none'}, export ${want ?? 'none'}`);
+    if ((v?.side ?? null) !== want) errors.push(`${g.game_id}: site paper bet ${v?.side ?? 'none'}, export ${want ?? 'none'}`);
   }
   const o = d.live_2026.official_bets;
   if (stats.w !== o.wins || stats.l !== o.losses || stats.push !== o.voids) {
-    errors.push(`value-call record ${stats.w}-${stats.l}-${stats.push} != official ${o.wins}-${o.losses}-${o.voids}`);
+    errors.push(`paper-bet record ${stats.w}-${stats.l}-${stats.push} != official ${o.wins}-${o.losses}-${o.voids}`);
   }
-  if (errors.length) throw new Error(`value calls disagree with the exporter's official record:\n  ${errors.join('\n  ')}`);
+  if (errors.length) throw new Error(`paper bets disagree with the exporter's official record:\n  ${errors.join('\n  ')}`);
 }
 
 export interface Site {
@@ -183,6 +205,21 @@ export interface Site {
       tossUps: number | null;
     };
     valueCalls: ValueRecord;
+  };
+  /** The "vs Vegas" page's extra numbers, all from the export. */
+  vsVegas: {
+    games: number;
+    sameWinner: number;
+    differentWinner: { games: number; wins: number; losses: number };
+    paper: Tally & {
+      pending: number;
+      graded: number;
+      units: number;
+      roi: number | null;
+      roiCi: readonly [number | null, number | null];
+      clv: { n: number; mean: number | null; ci: readonly [number | null, number | null] };
+      verdict: { status: string; final: boolean; so_far: string };
+    };
   };
   generatedAt: string;
   asOf: string;
@@ -204,7 +241,7 @@ export function buildSite(d: SiteData): Site {
     const games = byWeek.get(info.week) ?? [];
     const cards = games.map((g) => buildCard(g, live.get(g.game_id), L.edge_threshold, now));
     const picks = tally(cards.flatMap((c) => (c.pick ? [c.pick.grade] : [])));
-    const starred = tally(cards.flatMap((c) => (c.valueCall && c.valueCall.tier !== 'lean' ? [c.valueCall.grade] : [])));
+    const starred = tally(cards.flatMap((c) => (c.valueCall ? [c.valueCall.grade] : [])));
     const graded = picks.w + picks.l + picks.push > 0;
     pages.set(info.week, {
       info,
@@ -214,10 +251,11 @@ export function buildSite(d: SiteData): Site {
     });
   }
   const allCards = [...pages.values()].flatMap((p) => p.cards);
-  const vc = valueCallStats(allCards);
-  crossCheckValueCalls(d, new Map(allCards.map((c) => [c.gameId, c])), vc);
-  crossCheckAmendment6(d, allCards);
-  const vw = L.value_woe;
+  crossCheckPaperBets(d, new Map(allCards.map((c) => [c.gameId, c])), betStats(allCards));
+  crossCheckAmendments(d, allCards);
+  const vc = L.value_calls;
+  const pb = L.paper_bets;
+  const pv = L.picks_vs_vegas;
   const conf = L.prediction_quality_by_confidence;
 
   const champ = L.prediction_quality.champion.accuracy;
@@ -238,16 +276,33 @@ export function buildSite(d: SiteData): Site {
         tossUps: conf.toss_up.accuracy.value,
       },
       valueCalls: {
-        w: vw.all.wins,
-        l: vw.all.losses,
-        push: vw.all.pushes,
-        won: vw.all.won,
-        vegasExpected: vw.all.vegas_expected,
-        woe: vw.all.woe,
-        tiers: TIERS.map((t) => {
-          const e = vw[t];
+        w: vc.wins,
+        l: vc.losses,
+        push: vc.pushes,
+        won: vc.won,
+        vegasExpected: vc.vegas_expected,
+        woe: vc.woe,
+        tiers: STAR_TIERS.map((t) => {
+          const e = vc.tiers[t];
           return { tier: t, n: e.n, woe: e.woe, woePerCall: e.woe_per_call };
         }),
+      },
+    },
+    vsVegas: {
+      games: pv.games,
+      sameWinner: pv.same_winner,
+      differentWinner: pv.different_winner,
+      paper: {
+        w: pb.wins,
+        l: pb.losses,
+        push: pb.pushes,
+        pending: pb.pending,
+        graded: pb.graded,
+        units: pb.units,
+        roi: pb.roi,
+        roiCi: pb.roi_ci95,
+        clv: { n: pb.clv.n, mean: pb.clv.mean, ci: pb.clv.ci95 },
+        verdict: pb.verdict,
       },
     },
     generatedAt: d.generated_at,

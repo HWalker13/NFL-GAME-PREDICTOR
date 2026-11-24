@@ -34,13 +34,15 @@ describe('schema', () => {
     expect(() => parseSiteData(d)).toThrow(/does not match schedule_2026/);
   });
 
-  it('rejects a 1.2 export without the Amendment 6 fields', () => {
-    const d = raw();
-    delete d['live_2026'].value_woe;
-    expect(() => parseSiteData(d)).toThrow(/value_woe/);
+  it('rejects an export without the Amendment 8 blocks (1.4.x and older)', () => {
+    for (const k of ['value_calls', 'paper_bets', 'picks_vs_vegas']) {
+      const d = raw();
+      delete d['live_2026'][k];
+      expect(() => parseSiteData(d)).toThrow(new RegExp(k));
+    }
   });
 
-  it('rejects a live game missing its toss-up flag, or a tier out of step with the value call', () => {
+  it('rejects a live game missing its toss-up flag, or a tier out of step with the paper bet', () => {
     const d = raw();
     const g = d['games'].find((x: { evaluation: string }) => x.evaluation === 'live_2026');
     delete g.toss_up;
@@ -51,14 +53,14 @@ describe('schema', () => {
     expect(() => parseSiteData(e)).toThrow(/value_tier/);
   });
 
-  it('rejects a 1.3 export: numeric tiers, no Lean block, no one-star cutoff', () => {
+  it('rejects a 1.3 export: numeric tiers, no non-starred block, no one-star cutoff', () => {
     const d = raw();
     const b = d['games'].find((x: { evaluation: string; bet: boolean }) => x.evaluation === 'live_2026' && x.bet);
     b.value_tier = 2;
     expect(() => parseSiteData(d)).toThrow(/value_tier/);
     const e = raw();
-    delete e['live_2026'].value_woe.lean;
-    expect(() => parseSiteData(e)).toThrow(/value_woe\.lean/);
+    delete e['live_2026'].paper_bets.non_starred;
+    expect(() => parseSiteData(e)).toThrow(/paper_bets\.non_starred/);
     const f = raw();
     delete f['live_2026'].value_tier_one_star_edge;
     expect(() => parseSiteData(f)).toThrow(/value_tier_one_star_edge/);

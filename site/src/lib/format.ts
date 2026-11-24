@@ -53,6 +53,28 @@ export function signed1(x: number): string {
   return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(1)}`;
 }
 
+/** "32–33 (1 push)" */
+export const recordText = (r: { w: number; l: number; push: number }): string =>
+  `${r.w}–${r.l}${r.push > 0 ? ` (${r.push} ${r.push === 1 ? 'push' : 'pushes'})` : ''}`;
+
+/** Dollars on $1 stakes, with a true minus sign: +$6.98, −$0.50, $0.00. */
+export function dollars(x: number): string {
+  const r = Math.round(x * 100) / 100;
+  return `${r > 0 ? '+' : r < 0 ? '−' : ''}$${Math.abs(r).toFixed(2)}`;
+}
+
+/** A probability difference in percentage points, two decimals: +0.62, −0.11. */
+export function points2(x: number): string {
+  const r = Math.round(x * 10000) / 100;
+  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(2)}`;
+}
+
+/** A signed whole percent with a true minus sign: +11%, −23%. */
+export function signedPct(x: number): string {
+  const r = Math.round(x * 100);
+  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r)}%`;
+}
+
 /** The value tile's headline, split into the number and the words: "+3.6" "ahead of Vegas". */
 export function woeHeadline(woe: number): [string, string] {
   const r = Math.round(woe * 10) / 10;

@@ -5,9 +5,9 @@
   rendering blanks. `schedule_2026` and `live_2026.edge_threshold` arrived in 1.2.0; the
   Amendment 6 fields (`value_tier`, `toss_up`, `value_woe`, `prediction_quality_by_confidence`,
   `toss_up_threshold`, `value_tier_two_star_edge`) in 1.3.0; Amendment 7's three tiers (string
-  `value_tier`, `value_woe.lean`, `value_tier_one_star_edge`) in 1.4.0. The official record
-  (`live_2026.official_bets`) and `games[].bet_side` are read only to cross-check the value calls;
-  they're never rendered.
+  `value_tier`, `value_tier_one_star_edge`) in 1.4.0; Amendment 8's `value_calls`, `paper_bets` and
+  `picks_vs_vegas` (replacing `value_woe`) in 1.5.0. `live_2026.official_bets` and `games[].bet_side`
+  are read only to cross-check.
 */
 import { z } from 'zod';
 
@@ -21,7 +21,7 @@ const score = count.nullable();
 const side = z.enum(['home', 'away']);
 
 const rate = z.object({ k: count, n: count, value: prob.nullable() });
-/** Amendment 7 display tier of an official value call. */
+/** Amendment 7 tier of an official paper bet. Only one_star and two_star are value calls (Amendment 8). */
 const tier = z.enum(['lean', 'one_star', 'two_star']);
 
 export const scheduleGameSchema = z.object({
@@ -45,24 +45,26 @@ export const gameSchema = z.object({
   model_home_prob: prob,
   vegas_implied_home_prob: prob.nullable(),
   model_pick: side,
+  vegas_favorite: z.enum(['home', 'away', 'unresolved']),
   result: z.enum(['home', 'away', 'tie', 'pending']),
   away_score: score,
   home_score: score,
   pick_correct: z.boolean().nullable(),
   bet: z.boolean(),
   bet_side: side.nullable(),
-  /** Live games only (1.4.0): the value call's tier, decided by the exporter at full precision. */
+  /** Live games only (1.4.0): the paper bet's tier, decided by the exporter at full precision. */
   value_tier: tier.nullable().optional(),
   /** Live games only (1.3.0): the champion's favorite is at or below toss_up_threshold. */
   toss_up: z.boolean().optional(),
 });
 
-/** The official paper record's outcome counts; the site's graded value calls must equal these. */
+/** The official paper record's outcome counts; the site's graded paper bets must equal these. */
 const officialRecord = z.object({ wins: count, losses: count, voids: count, pending: count });
 
-/** Wins over expected for one tier (or all calls). Sums are over graded calls, pushes excluded. */
+/** Wins over expected for one group of paper bets. Sums are over graded calls, pushes excluded. */
 const woeBlock = z.object({
-  calls_logged: count,
+  logged: count,
+  graded: count,
   wins: count,
   losses: count,
   pushes: count,
@@ -71,6 +73,34 @@ const woeBlock = z.object({
   vegas_expected: z.number().min(0),
   woe: z.number(),
   woe_per_call: z.number().nullable(),
+});
+
+const ci = z.tuple([z.number().nullable(), z.number().nullable()]);
+const valueCalls = woeBlock.extend({ record: z.string(), tiers: z.object({ one_star: woeBlock, two_star: woeBlock }) });
+const paperBets = z.object({
+  edge_threshold: z.number(),
+  logged: count,
+  graded: count,
+  pending: count,
+  wins: count,
+  losses: count,
+  pushes: count,
+  record: z.string(),
+  units: z.number(),
+  roi: z.number().nullable(),
+  roi_ci95: ci,
+  clv: z.object({ n: count, mean: z.number().nullable(), ci95: ci, n_excluded: count }),
+  wins_over_expected: woeBlock,
+  non_starred: woeBlock,
+  verdict: z.object({ status: z.string(), final: z.boolean(), so_far: z.string() }),
+});
+const picksVsVegas = z.object({
+  games: count,
+  model: rate,
+  vegas_favorite: rate,
+  no_favorite: count,
+  same_winner: count,
+  different_winner: z.object({ games: count, wins: count, losses: count }),
 });
 
 const byConfidence = z.object({ games_logged: count, accuracy: rate });
@@ -94,7 +124,9 @@ export const siteDataSchema = z
       value_tier_one_star_edge: z.number().gt(0).lt(1),
       value_tier_two_star_edge: z.number().gt(0).lt(1),
       toss_up_threshold: z.number().gt(0.5).lt(1),
-      value_woe: z.object({ all: woeBlock, lean: woeBlock, one_star: woeBlock, two_star: woeBlock }),
+      value_calls: valueCalls,
+      paper_bets: paperBets,
+      picks_vs_vegas: picksVsVegas,
       prediction_quality_by_confidence: z.object({ confident: byConfidence, toss_up: byConfidence, all: byConfidence }),
       prediction_quality: z.object({
         champion: z.object({ accuracy: rate }),
@@ -148,7 +180,7 @@ export function parseSiteData(raw: unknown): SiteData {
   const r = siteDataSchema.safeParse(raw);
   if (!r.success) {
     const lines = r.error.issues.slice(0, 20).map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
-    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.4.0):\n${lines.join('\n')}`);
+    throw new Error(`site_data.json failed validation (needs schema 1.x, >= 1.5.0):\n${lines.join('\n')}`);
   }
   return r.data;
 }

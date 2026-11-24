@@ -417,16 +417,16 @@ class Schedule2026(unittest.TestCase):
             self.assertFalse(out.exists())
 
 
-class Amendment6(unittest.TestCase):
-    """Value tiers (Amendment 7: Lean / one-star / two-star), wins over expected and toss-ups
-    (display only): consistent with the official record, with the per-game flags, and with the
-    scorecard."""
+class Amendments6To8(unittest.TestCase):
+    """Value calls (★/★★), paper bets, picks vs Vegas, WOE and toss-ups: consistent with the
+    official record, with the per-game flags, and with the scorecard."""
 
     @classmethod
     def setUpClass(cls):
         cls.d = _load()
         cls.L = cls.d["live_2026"]
-        cls.vw = cls.L["value_woe"]
+        cls.vc, cls.pb, cls.pv = (cls.L[k] for k in ("value_calls", "paper_bets", "picks_vs_vegas"))
+        cls.tiers = {"lean": cls.pb["non_starred"], **cls.vc["tiers"]}
         cls.live = [g for g in cls.d["games"] if g["evaluation"] == "live_2026"]
 
     def test_constants_from_rule(self):
@@ -435,28 +435,55 @@ class Amendment6(unittest.TestCase):
         self.assertEqual(self.L["value_tier_two_star_edge"], C.VALUE_TIER_2_EDGE)
         self.assertEqual((self.L["value_tier_one_star_edge"], self.L["value_tier_two_star_edge"]), (0.11, 0.16))
         self.assertEqual(self.L["toss_up_threshold"], C.TOSS_UP_MAX_FAV)
-        self.assertEqual(self.d["schema_version"], "1.4.1")
-        self.assertEqual(list(self.vw), sorted(SC.TIER_KEYS))   # keys sorted in the JSON
+        self.assertEqual(self.d["schema_version"], "1.5.0")
+        self.assertEqual(set(self.vc["tiers"]), set(C.STARRED_TIERS))
+        self.assertNotIn("value_woe", self.L)
 
-    def test_tier_counts_sum_to_official(self):
-        tiers, a = [self.vw[k] for k in C.VALUE_TIERS], self.vw["all"]
-        for f in ("calls_logged", "calls_graded", "wins", "losses", "pushes", "n", "won"):
-            self.assertEqual(sum(t[f] for t in tiers), a[f], f)
+    def test_value_calls_are_the_starred_tiers(self):
+        for f in ("logged", "graded", "wins", "losses", "pushes", "n", "won"):
+            self.assertEqual(sum(t[f] for t in self.vc["tiers"].values()), self.vc[f], f)
+        self.assertEqual(self.vc["record"], "{wins}-{losses}-{pushes}".format(**self.vc))
+        self.assertEqual(self.vc["logged"], sum(g["value_tier"] in C.STARRED_TIERS for g in self.live))
+
+    def test_starred_plus_non_starred_is_the_official_record(self):
+        o, non = self.L["official_bets"], self.pb["non_starred"]
+        self.assertEqual([self.vc[f] + non[f] for f in ("wins", "losses", "pushes", "graded")],
+                         [o["wins"], o["losses"], o["voids"], o["bets"]])
+        self.assertEqual(self.vc["logged"] + non["logged"], sum(g["bet"] for g in self.live))
+
+    def test_paper_bets_match_official_bets(self):
         o = self.L["official_bets"]
-        self.assertEqual((a["wins"], a["losses"], a["pushes"], a["calls_graded"]),
-                         (o["wins"], o["losses"], o["voids"], o["bets"]))
-        self.assertEqual(a["calls_logged"], sum(g["bet"] for g in self.live))
-        self.assertEqual(a["n"], a["wins"] + a["losses"])
+        for f, g in (("wins", "wins"), ("losses", "losses"), ("pushes", "voids"), ("record", "record"),
+                     ("units", "units"), ("roi", "roi"), ("roi_ci95", "roi_ci95"), ("clv", "clv"), ("graded", "bets")):
+            self.assertEqual(self.pb[f], o[g], f)
+        self.assertEqual(self.pb["pending"], sum(g["bet"] and g["result"] == "pending" for g in self.live))
+        v = self.L["clv_verdict"]
+        self.assertEqual(self.pb["verdict"], {"status": "decided" if v["final"] else "decided after week 18",
+                                              "final": v["final"], "so_far": v["verdict"]})
 
-    def test_tier_woe_sums_to_overall(self):
-        tiers, a = [self.vw[k] for k in C.VALUE_TIERS], self.vw["all"]
+    def test_picks_vs_vegas_reconciles(self):
+        dec = [g for g in self.live if g["result"] in ("home", "away")]
+        fav = [g for g in dec if g["vegas_favorite"] != "unresolved"]
+        diff = [g for g in fav if g["model_pick"] != g["vegas_favorite"]]
+        dw = self.pv["different_winner"]
+        self.assertEqual((dw["games"], dw["wins"]), (len(diff), sum(g["pick_correct"] for g in diff)))
+        self.assertEqual(dw["wins"] + dw["losses"], dw["games"])
+        self.assertEqual(self.pv["same_winner"] + dw["games"] + self.pv["no_favorite"], len(dec))
+        q = self.L["prediction_quality"]
+        self.assertEqual(self.pv["model"], q["champion"]["accuracy"])
+        self.assertEqual(self.pv["vegas_favorite"], q["vegas_favorite"]["accuracy"])
+
+    def test_tier_woe_sums(self):
+        a = self.pb["wins_over_expected"]
         for f in ("vegas_expected", "model_expected", "woe"):
-            self.assertAlmostEqual(sum(t[f] for t in tiers), a[f], delta=2.5e-4, msg=f)   # four 4-dp roundings
-        # at full precision the tiers sum exactly (up to float addition)
+            self.assertAlmostEqual(sum(t[f] for t in self.tiers.values()), a[f], delta=2.5e-4, msg=f)
+            self.assertAlmostEqual(sum(t[f] for t in self.vc["tiers"].values()), self.vc[f], delta=2.5e-4, msg=f)
         full = SC.value_woe_rows(SC.load_graded(E.LIVE_ROOT, E.LIVE_SEASON))
-        for f in ("vegas_expected", "model_expected", "woe"):
+        for f in ("vegas_expected", "model_expected", "woe"):   # exact at full precision
             self.assertAlmostEqual(sum(full[k][f] for k in C.VALUE_TIERS), full["all"][f], places=9, msg=f)
-        for t in tiers + [a]:
+            self.assertAlmostEqual(sum(full[k][f] for k in C.STARRED_TIERS), full["value_calls"][f], places=9, msg=f)
+        for t in [*self.tiers.values(), a, self.vc]:
+            self.assertEqual(t["n"], t["wins"] + t["losses"])
             self.assertAlmostEqual(t["woe"], t["won"] - t["vegas_expected"], delta=2e-4)
             if t["n"]:
                 self.assertAlmostEqual(t["woe_per_call"], t["woe"] / t["n"], delta=1e-4)
@@ -472,7 +499,7 @@ class Amendment6(unittest.TestCase):
                 p = g["model_home_prob"]   # 4 dp: only check games clear of the cutoff
                 if abs(max(p, 1 - p) - C.TOSS_UP_MAX_FAV) > 1e-4:
                     self.assertEqual(g["toss_up"], max(p, 1 - p) <= C.TOSS_UP_MAX_FAV)
-        self.assertEqual(tiers, {k: self.vw[k]["calls_logged"] for k in C.VALUE_TIERS})
+        self.assertEqual(tiers, {k: self.tiers[k]["logged"] for k in C.VALUE_TIERS})
 
     def test_per_game_flags_match_full_precision_sources(self):
         preds = E.load_live_predictions()
@@ -501,30 +528,42 @@ class Amendment6(unittest.TestCase):
     def test_scorecard_section_verbatim(self):
         graded = SC.load_graded(E.LIVE_ROOT, E.LIVE_SEASON)
         self.assertIn(SC.amendment6_section(graded), E.SCORECARD_PATH.read_text())
+        self.assertIn(SC.tier_breakdown_table(graded), E.SCORECARD_PATH.read_text())
+
+    def _refuses(self, name, bad):
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / "out.json"
+            with mock.patch.object(E, name, bad), mock.patch("sys.stderr"):
+                self.assertEqual(E.main(["--out", str(out)]), 2)
+            self.assertFalse(out.exists())
 
     def test_refuses_on_tier_mismatch(self):
-        orig = E.amendment6_value_woe
-        def bad(graded, champ_pred):
-            out = orig(graded, champ_pred)
-            out["two_star"] = dict(out["two_star"], woe=out["two_star"]["woe"] + 0.5)
-            return out
-        with tempfile.TemporaryDirectory() as t:
-            out = Path(t) / "out.json"
-            with mock.patch.object(E, "amendment6_value_woe", bad), mock.patch("sys.stderr"):
-                self.assertEqual(E.main(["--out", str(out)]), 2)
-            self.assertFalse(out.exists())
+        orig = E.tier_woe
+        for key, f in (("two_star", "woe"), ("lean", "pushes"), ("value_calls", "wins"), ("one_star", "logged")):
+            def bad(graded, champ_pred):
+                out = orig(graded, champ_pred)
+                out[key] = dict(out[key], **{f: out[key][f] + 1})
+                return out
+            with self.subTest(key=key, field=f):
+                self._refuses("tier_woe", bad)
 
-    def test_refuses_on_missing_tier(self):
-        orig = E.amendment6_value_woe
-        def bad(graded, champ_pred):
-            out = orig(graded, champ_pred)
-            del out["lean"]
+    def test_refuses_on_disagreement_mismatch(self):
+        orig = E.picks_vs_vegas_block
+        def bad(graded):
+            out = orig(graded)
+            dw = out["different_winner"]
+            out["different_winner"] = dict(dw, wins=dw["wins"] + 1, losses=dw["losses"] - 1)
             return out
-        with tempfile.TemporaryDirectory() as t:
-            out = Path(t) / "out.json"
-            with mock.patch.object(E, "amendment6_value_woe", bad), mock.patch("sys.stderr"):
-                self.assertEqual(E.main(["--out", str(out)]), 2)
-            self.assertFalse(out.exists())
+        self._refuses("picks_vs_vegas_block", bad)
+
+    def test_paper_bets_drift_is_flagged(self):
+        blk = json.loads(json.dumps(self.L))
+        for f, v in (("units", 99.0), ("record", "0-0-0"), ("graded", 1)):
+            b = json.loads(json.dumps(blk))
+            b["paper_bets"][f] = v
+            errs: list[str] = []
+            E.check_amendment8(b, self.live, errs)
+            self.assertTrue(any(f"paper_bets {f}" in e for e in errs), (f, errs))
 
 
 class DeterminismAndGuards(unittest.TestCase):
@@ -568,7 +607,9 @@ class DeterminismAndGuards(unittest.TestCase):
             | set(d["negative_control"]["conditions"][0]["check2"]) \
             | set(d["negative_control"]["conditions"][0]["check2"]["current_67"]) \
             | set(d["schedule_2026"][0]) \
-            | set(d["live_2026"]["value_woe"]) | set(d["live_2026"]["value_woe"]["all"]) \
+            | set(d["live_2026"]["value_calls"]) | set(d["live_2026"]["value_calls"]["tiers"]["one_star"]) \
+            | set(d["live_2026"]["paper_bets"]) | set(d["live_2026"]["paper_bets"]["verdict"]) \
+            | set(d["live_2026"]["picks_vs_vegas"]) | set(d["live_2026"]["picks_vs_vegas"]["different_winner"]) \
             | set(d["live_2026"]["prediction_quality_by_confidence"]) \
             | set(d["live_2026"]["prediction_quality_by_confidence"]["all"])
         missing = sorted(k for k in keys if f"`{k}`" not in schema)

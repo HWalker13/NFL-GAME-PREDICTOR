@@ -12,15 +12,16 @@ export type Grade = 'win' | 'loss' | 'push' | 'open';
 export type Side = 'home' | 'away';
 
 /**
- * Value-call tier (Amendment 7, display only), on the call's own edge: 'lean' = 4 to 11 points,
- * 'one_star' = ★, 11 to 16 points, 'two_star' = ★★, 16 points or more. A lean-tier call is still an
- * official value call; the site shows it only in the details sentence and the header's "Smaller
- * edges" row, never as a card chip, and never with the word "Lean".
+ * A paper bet's tier (Amendment 7), on its own edge: 'lean' = 4 to 11 points, 'one_star' = ★, 11 to
+ * 16 points, 'two_star' = ★★, 16 points or more. Only the starred tiers are value calls (Amendment
+ * 8); on the cards every other game is an ordinary pick, and 'lean' is never shown as a word.
  */
 export type Tier = 'lean' | 'one_star' | 'two_star';
+export type StarTier = Exclude<Tier, 'lean'>;
 
 /** Display order, lowest tier first. */
 export const TIERS: readonly Tier[] = ['lean', 'one_star', 'two_star'];
+export const STAR_TIERS: readonly StarTier[] = ['one_star', 'two_star'];
 
 export interface TeamRow {
   abbr: string;
@@ -46,11 +47,14 @@ export interface Card {
   home: TeamRow;
   /** The team the model gives > 50%. Present only when the model logged a prediction. */
   pick: Call | null;
+  /** The starred (★/★★) paper bet, if any: the only thing the site calls a value call. */
+  valueCall: (Call & { vegasProb: number; tier: StarTier }) | null;
   /**
-   * The team whose model probability beats Vegas's by at least the threshold, if any. `tier` is the
+   * The team whose model probability beats Vegas's by at least the 4-point threshold, if any. Used
+   * only to cross-check the export's paper-bet record; cards never render it. `tier` is the
    * exporter's (decided at full precision); null only when the export carries none.
    */
-  valueCall: (Call & { vegasProb: number; tier: Tier | null }) | null;
+  paperBet: (Call & { vegasProb: number; tier: Tier | null }) | null;
   /** The model's two win chances are within 10 points (the exporter's flag). False without a pick. */
   tossUp: boolean;
   /** Both sides' probabilities, for the details bars. Null when there's no prediction. */
@@ -111,6 +115,7 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
 
   let pick: Card['pick'] = null;
   let valueCall: Card['valueCall'] = null;
+  let paperBet: Card['paperBet'] = null;
   let probs: Card['probs'] = null;
   if (live && pickSide) {
     const pHome = live.model_home_prob;
@@ -125,7 +130,7 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
     };
     const vs = valueSide(pHome, vHome, threshold);
     if (vs && vHome !== null) {
-      valueCall = {
+      paperBet = {
         side: vs,
         team: teamOf(vs),
         grade: gradeSide(vs, w),
@@ -133,6 +138,8 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
         vegasProb: forSide(vs, vHome),
         tier: live.value_tier ?? null,
       };
+      const { tier } = paperBet;
+      if (tier === 'one_star' || tier === 'two_star') valueCall = { ...paperBet, tier };
     }
   }
 
@@ -149,18 +156,18 @@ export function buildCard(s: ScheduleGame, live: Game | undefined, threshold: nu
     home,
     pick,
     valueCall,
+    paperBet,
     tossUp: Boolean(live && pickSide && live.toss_up),
     probs,
     decimals,
   };
 }
 
-/** Visible stars for a tier; the lean tier has none (and no card chip). */
-export const STARS: Record<Tier, string> = { lean: '', one_star: '★', two_star: '★★' };
+/** Visible stars for a value call. */
+export const STARS: Record<StarTier, string> = { one_star: '★', two_star: '★★' };
 
 /** Accessible name for a tier (the stars are hidden from screen readers). */
-export const tierLabel = (t: Tier): string =>
-  ({ lean: 'smaller-edge value call', one_star: 'one-star value call', two_star: 'two-star value call' })[t];
+export const tierLabel = (t: StarTier): string => ({ one_star: 'one-star value call', two_star: 'two-star value call' })[t];
 
 /**
  * The tier for an edge, given the cutoffs; same 10-decimal comparison as the exporter. Only for the
@@ -178,14 +185,12 @@ export function detailsSentence(c: Card, p: (x: number) => string): string | nul
   if (vegasHome === null) return `Model gives ${c.pick.team} ${p(c.pick.modelProb)}. No Vegas odds were saved for this game.`;
   if (c.valueCall) {
     const v = c.valueCall;
-    // A lean-tier call has no chip on the card; this sentence is where it shows (display note, 2026-11-17).
-    if (v.tier === 'lean') return `Model gives ${v.team} ${p(v.modelProb)}, Vegas ${p(v.vegasProb)} — the model sees slight value on ${v.team}.`;
     return `Model gives ${v.team} ${p(v.modelProb)}, Vegas ${p(v.vegasProb)} — the model thinks ${v.team} is underrated.`;
   }
-  // Under the threshold: describe the side the model likes a bit more than Vegas does.
+  // Every other game, paper bet or not, reads the same neutral way (Amendment 8): describe the side the model likes a bit more than Vegas does.
   const side: Side = modelHome >= vegasHome ? 'home' : 'away';
   const team = side === 'home' ? c.home.abbr : c.away.abbr;
   const m = side === 'home' ? modelHome : 1 - modelHome;
   const v = side === 'home' ? vegasHome : 1 - vegasHome;
-  return `Model gives ${team} ${p(m)}, Vegas ${p(v)} — close to the market.`;
+  return `Model gives ${team} ${p(m)}, Vegas ${p(v)}.`;
 }

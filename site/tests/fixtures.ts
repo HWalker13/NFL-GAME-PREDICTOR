@@ -25,6 +25,7 @@ export function live(over: Partial<Game> = {}): Game {
     model_home_prob: 0.64,
     vegas_implied_home_prob: 0.74,
     model_pick: 'home',
+    vegas_favorite: 'home',
     result: 'pending',
     away_score: null,
     home_score: null,
