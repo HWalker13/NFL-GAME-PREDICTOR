@@ -26,6 +26,8 @@ Two decisions are pre-registered:
 
 The honest prior on both is "no" (Sections 4–5).
 
+*(added by Amendment 8)* Two terms are used for the same disagreements, and they mean different things. A **paper bet** is the pre-registered experiment: a pretend 1-unit bet on every game where the model and the market disagree by at least 4 points (Section 2). Paper bets are logged, settled and judged by CLV exactly as written below, and the season-end verdict rests on them alone. A **value call** is a display label for the rare, large disagreements: a paper bet whose edge is at least 11 points (★) or at least 16 points (★★). Every value call is also a paper bet, but most paper bets are not value calls. The public site's "value calls" record counts only ★ and ★★, for every week from week 3. It is descriptive and decides nothing.
+
 ---
 
 ## 1. Models (frozen; sha256 pinned in `scripts/live/common.py: FROZEN_MODELS`)
@@ -381,6 +383,8 @@ Appendix B hashes record drafting time and are intentionally not updated.
 
 *Addendum to Amendment 6 (2026-11-15, owner): code hashes.* Recorded after the Stage 2 build; Amendment 6's text above is unchanged. `scripts/live/common.py` sha256 `010aae41…` → `0f3422fa…`; `scripts/live/scorecard.py` sha256 `e61acb39…` → `eb681cff…`; `scripts/export_site_data.py` sha256 `0f9197c1…` → `580488a7…`. The paper-bet rule's code (`edge_qualifies`, `paper_bet`, `bet_units`) is byte-for-byte unchanged inside `common.py`; the diff only adds the display-only helpers.
 
+Note (2026-11-24, owner): Value-tier definitions superseded by Amendment 7; 'value call' redefined by Amendment 8.
+
 **Amendment 7 (2026-11-17, owner):** three display tiers, Lean / ★ / ★★, replace Amendment 6's two value tiers. This supersedes **only** Amendment 6's value-tier definitions; its toss-up flag (0.55) and its WOE, Vegas expected and model expected definitions are unchanged. **Unchanged:** the paper-bet rule (Section 2), its 0.04 threshold and 10-decimal comparison, settlement, the frozen models and their sha256s, `src/features.py`, every logged prediction, every graded file, the checkpoint (Section 5, Amendment 4), the CLV rule (Amendment 3) and the season-end verdict (Section 4). No value call is added or removed, and the official record (**29–28–1** through week 10) is identical before and after.
 
 *Definitions.*
@@ -434,3 +438,70 @@ Appendix B hashes record drafting time and are intentionally not updated.
 Display note (2026-11-17, owner): Lean-tier value calls are shown only in game details (no card chip); the header reports them as 'Smaller edges'. The headline still covers all official value calls. Tier definitions, cutoffs and data are unchanged.
 
 Clarification (2026-11-24, owner): 'that game's kickoff' in Section 3 and Amendment 3 means the actual kickoff from the latest schedule snapshot. The grader now selects the last pre-kickoff snapshot against the earlier of the logged and actual kickoff, and records moved kickoffs. First case: week 11 PIT@PHI was flexed 16:25→13:00 ET and JAX@NYG 13:00→16:25 ET after the prediction snapshot; both predictions were logged 2026-11-17, and the PIT@PHI CLV snapshot (16:21Z) precedes the actual kickoff, so no graded value changes.
+
+**Amendment 8 (2026-11-24, owner):** "value call" now means ★ or ★★ only, recounted from week 3; the 4-point bets are called "paper bets". This supersedes the use of "value call" for every official 4-point bet in Amendments 6 and 7, Amendment 7's statement that a Lean is a value call, the 2026-11-17 Display note (the "Smaller edges" row and the all-bets headline), and Section 3's edge-size buckets as a scorecard table. **Unchanged:** the paper-bet rule (Section 2), its 0.04 threshold and 10-decimal comparison, settlement, which rows are official (`bet_status = official`), the tier cutoffs (0.11 and 0.16), the toss-up flag (0.55), the WOE formula, the frozen models and their sha256s, `src/features.py`, every logged prediction, every graded file, the checkpoint (Section 5, Amendment 4), the CLV rule (Amendment 3 and the 2026-11-24 Clarification) and the season-end verdict (Section 4).
+
+*Definitions.*
+- **Paper bet:** an official bet under Section 2 (edge ≥ 0.04). The paper-bet record, units, ROI, CLV and the Section 4 verdict cover all of them, exactly as before. They are called "paper bets" everywhere and never "value calls".
+- **Value call:** a paper bet whose tier is ★ ([0.11, 0.16)) or ★★ (0.16 and above), with the same 10-decimal comparison as `edge_qualifies`. An edge of exactly 0.11 is a value call. This applies to every week from week 3; past weeks are recounted this way. "Regraded" in this sense is a recount: no graded file changes.
+- **Non-starred paper bet:** a paper bet with an edge in [0.04, 0.11) (Amendment 7's Lean, still stored as `lean` in code and data). It is a paper bet only. On the site it is an ordinary pick: no chip, no header row and no value wording. The details panel still shows both probabilities, with the neutral sentence "Model gives TEAM X%, Vegas Y%."
+- **WOE, Vegas expected, model expected:** formulas as in Amendment 6. Where they describe value calls, they are summed over ★ and ★★ only.
+- **Starred-only CLV** may be reported, as descriptive only. It never replaces the CLV of all official paper bets in the Section 4 verdict.
+- **Scorecard:** Section 3's edge-size buckets ([0.04, 0.06), [0.06, 0.08), [0.08+)) are replaced by Amendment 7's tiers ([0.04, 0.11), ★, ★★), still for the champion and the challenger separately and still descriptive only.
+
+*Reason.* Under the 4-point rule about two-thirds of logged games were value calls: **78 of 119 (65.5%)** through week 12 logged, and **66 of 103 (64.1%)** through week 11 graded. A label on two games in three carries no signal. Amendment 7's tiers made stars rare on the cards, but the headline and the record still counted every 4-point bet, which contradicted the cards. Under this amendment **28 of 119 games (23.5%)** through week 12 logged are value calls (21 of 103, 20.4%, through week 11 graded).
+
+*Disclosure.* This was decided **after** per-tier results were visible on the site and in `docs/live/SCORECARD_2026.md`. Through week 11 graded:
+
+| Official paper bets | Logged | W–L–P | Won | Vegas expected | WOE | WOE per call |
+|---|---:|---|---:|---:|---:|---:|
+| ★ | 12 | 6–6–0 | 6 | 5.514 | +0.486 | +0.0405 |
+| ★★ | 9 | 6–3–0 | 6 | 3.209 | +2.791 | +0.3101 |
+| **Starred (value calls)** | **21** | **12–9–0** | **12** | **8.723** | **+3.277** | **+0.1560** |
+| **Non-starred** | **45** | **20–24–1** | **20** | **20.179** | **−0.179** | **−0.0041** |
+| All paper bets | 66 | 32–33–1 | 32 | 28.903 | +3.097 | +0.0477 |
+
+In plain words: the bets this change drops from the value-call record are the ones that did worse, so **the change makes the displayed value-call record look better** (32–33–1 becomes 12–9). It is therefore not evidence that the model finds value, and 21 calls are too few to show anything.
+- *Mitigation.* The 0.11 and 0.16 cutoffs were not chosen now. They were fixed in Amendment 7, from frequency targets applied to held-out edge sizes, with no outcomes loaded. They are not changed here. What was decided with results visible is which tiers the words "value call" cover.
+- *The experiment is untouched.* The pre-registered experiment (paper bets, 4-point rule, CLV verdict) stays exactly as it was, because its purpose is to test every disagreement of 4 points or more. Changing it midseason, with results visible, would void it. The non-starred bets stay in it, and their results stay published.
+- *The buckets.* Section 3's buckets were pre-registered. Replacing them is a descriptive change only: they were barred from affecting any decision, and the tiers are too. The bucket tables published before this amendment stay in git history.
+- Week 12 is logged but not graded; no week-12 result is used here.
+
+*Effect* (champion rows, all official; edges at 10-decimal rounding). Site headline, value-calls tile:
+
+| | Before | After |
+|---|---|---|
+| Headline | +3.1 ahead of Vegas | +3.3 ahead of Vegas |
+| Won · Vegas expected | Won 32 · Vegas expected 28.9 | Won 12 · Vegas expected 8.7 |
+| Record | 32–33 (1 push) | 12–9 |
+| Rows | ★, ★★, "Smaller edges" | ★, ★★ |
+
+The official paper-bet record is **32–33–1** (+6.98 units) before and after. Paper bets per week:
+
+| Week | Games logged | Paper bets | Starred | Non-starred |
+|---|---:|---:|---:|---:|
+| 3 | 16 | 11 | 5 | 6 |
+| 4 | 16 | 11 | 3 | 8 |
+| 5 | 15 | 10 | 5 | 5 |
+| 6 | 14 | 11 | 1 | 10 |
+| 7 | 14 | 9 | 4 | 5 |
+| 8 (one game) | 1 | 1 | 0 | 1 |
+| 9 (missed) | 0 | 0 | 0 | 0 |
+| 10 | 14 | 5 | 2 | 3 |
+| 11 | 13 | 8 | 1 | 7 |
+| **Through week 11 (graded)** | **103** | **66** | **21** | **45** |
+| 12 (pending) | 16 | 12 | 7 | 5 |
+| **Through week 12 (logged)** | **119** | **78** | **28** | **50** |
+
+*Scope.* No prediction, model, `features.py`, grade or bet changes, and nothing under `data/live/` is rewritten. Code changes (Stage 2, after this amendment is committed; sha256 prefixes before):
+- `scripts/live/scorecard.py` (`db841462…`): the Section 3 bucket table becomes the tier table; the betting section is labelled "Paper bets (4-point rule, pre-registered)"; value-call rows cover ★ and ★★ only.
+- `scripts/live/common.py` (`0c2cb7f6…`): comments and docstrings only, if needed for the new wording, plus a display-only helper for ★/★★. The paper-bet rule's code (`edge_qualifies`, `paper_bet`, `bet_units`), `value_tier` and the cutoffs are not touched.
+- `scripts/export_site_data.py` (`18dc4c61…`): `value_calls` (★/★★ only), `paper_bets` and `picks_vs_vegas` blocks, with cross-checks (starred + non-starred = official record exactly, pushes included; `paper_bets` = scorecard; disagreement counts = per-game data). Existing checks are kept, including the moved-kickoff ones. Schema bumped to 1.5.0. `exports/SCHEMA.md` (`18cb7cb9…`) is updated.
+- Tests: `scripts/test_phase10_live.py` (`abb42752…`) and `scripts/test_export_site_data.py` (`2b2d3b82…`).
+- Site:
+  - `site/src/lib/schema.ts` (`2b380e00…`), `site/src/lib/card.ts` (`eb134a67…`), `site/src/lib/data.ts` (`4ea1796e…`), `site/src/lib/format.ts` (`ed4aea75…`) and `site/src/lib/links.ts` (`554ebb1e…`).
+  - `site/src/components/Header.astro` (`14b8511f…`), `site/src/components/GameCard.astro` (`28eeff0d…`), `site/src/components/WeekTabs.astro` (`f07f88d6…`), `site/src/components/WeekView.astro` (`69d2c9af…`), `site/src/layouts/Base.astro` (`d64c5063…`) and `site/src/styles/global.css` (`b29a87c3…`); new `site/src/pages/vs-vegas.astro` (the "vs Vegas" tab).
+  - Site tests: `site/tests/build.test.ts` (`171ef2b4…`), `site/tests/card.test.ts` (`8ce56fb0…`), `site/tests/contrast.test.ts` (`6199ee49…`), `site/tests/fixtures.ts` (`9ef4e0b6…`) and `site/tests/schema.test.ts` (`48b6ab29…`); the fixture `site/tests/fixtures/site_data_2026-11-12.json` (`2cda464a…`) and its `site/tests/fixtures/README.md` (`f6055aaf…`).
+- Regenerated by the owner: `docs/live/SCORECARD_2026.md` (`627bcb34…`) (`scorecard --live`), the live metrics if changed, and `exports/site_data.json` (`a01f236a…`).
+
+Appendix B hashes record drafting time and are intentionally not updated.
