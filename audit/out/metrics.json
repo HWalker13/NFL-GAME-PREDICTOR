@@ -712,6 +712,12 @@
         "predicted_at_utc": "2026-11-17T21:24:01Z",
         "first_logged_kickoff_utc": "2026-11-20T01:15:00Z",
         "graded": true
+      },
+      "12": {
+        "games_logged": 16,
+        "predicted_at_utc": "2026-11-24T20:52:01Z",
+        "first_logged_kickoff_utc": "2026-11-26T01:00:00Z",
+        "graded": false
       }
     },
     "graded_weeks": [
