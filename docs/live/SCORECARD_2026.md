@@ -1,6 +1,6 @@
 # 2026 shadow-mode scorecard
 
-_Generated 2026-11-24T20:51:00Z from 8 graded week file(s): 3, 4, 5, 6, 7, 8, 10, 11. Paper trading only -- no real money.
+_Generated 2026-11-24T23:20:32Z from 8 graded week file(s): 3, 4, 5, 6, 7, 8, 10, 11. Paper trading only -- no real money.
 Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged predictions are never edited._
 
 ## How to read this
@@ -20,6 +20,8 @@ Rules: `docs/PHASE10_PREREG.md`. Regenerated from the graded files; the logged p
 - **Bet CLV**: how much the vig-free implied probability of the side bet moved between the prediction
   snapshot and the **last pre-kickoff snapshot** (not the true close). Positive = the market moved
   toward the bet. **Line move -> model**: the same movement for every game, signed toward the model's view.
+- **Value call**: an official paper bet with an edge of at least 11 points (★) or 16 points (★★). A display
+  label (Amendment 8); every other paper bet is a paper bet only.
 - **Small samples mislead.** A season is ~270 games; this rule bets only a fraction of them. With 50
   bets, a ROI 95% interval is roughly +/-25 points wide, so a hot or cold streak says almost nothing.
   CLV is the less noisy signal, and it is the only one the pre-registered verdict accepts as evidence.
@@ -39,7 +41,7 @@ Games logged: 103 (decided 102, tie 1, pending 0).
 | Vegas favorite (prediction snapshot) | 102 | 63/102 = 0.618 [0.521, 0.706] | – | – |
 | Vegas implied (prediction snapshot) | 102 | – | 0.650 [0.578, 0.722] | 0.230 [0.198, 0.262] |
 
-## Cumulative -- paper bets and line movement
+## Paper bets (4-point rule, pre-registered)
 
 | Model | Bets (home) | W-L-Void (pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n, excluded) | One-sided p (CLV>0) | Line move -> model [95% CI] (n) |
 |---|---:|---|---:|---|---|---:|---|
@@ -49,31 +51,32 @@ Games logged: 103 (decided 102, tie 1, pending 0).
 
 `Bets (home)` shows how many bets were on the home side: both models carry the known home-win bias (Phase 8 negative calibration intercepts), so a home-heavy bet mix is expected.
 
-## Paper bets by edge size (DESCRIPTIVE ONLY)
+## Paper bets by tier (DESCRIPTIVE ONLY)
 
-This breakdown is descriptive only. It cannot change the season-end verdict (Section 4), the paper-bet threshold, or the checkpoint decision. Its purpose: if the model carries real information, larger edges should perform better; a flat or non-monotonic pattern indicates edges are mostly model error. Small per-bucket samples are expected and will be labelled.
+This breakdown is descriptive only. It cannot change the season-end verdict (Section 4), the paper-bet threshold, or the checkpoint decision. Its purpose: if the model carries real information, larger edges should perform better; a flat or non-monotonic pattern indicates edges are mostly model error. Small per-tier samples are expected and will be labelled. Amendment 8 replaced Section 3's edge-size buckets with these Amendment 7 tiers.
 
 Edge = model probability minus vig-free implied probability for the side bet, at the prediction snapshot. ROI = units per unit staked on settled bets.
 
-| Model | Edge bucket | Bets | W-L (void, pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n) | Sample |
+| Model | Tier (edge) | Bets | W-L (void, pending) | Units | ROI [95% CI] | Mean bet CLV [95% CI] (n) | Sample |
 |---|---|---:|---|---:|---|---|---|
-| champion | [0.04, 0.06) | 14 | 5-8 (1, 0) | -3.54 | -0.273 [-0.884, 0.338] | -0.0052 [-0.0629, 0.0526] (n=3) | small sample (n<30) |
-| champion | [0.06, 0.08) | 16 | 10-6 (0, 0) | +5.00 | 0.312 [-0.573, 1.197] | 0.0024 [-0.0191, 0.0239] (n=8) | small sample (n<30) |
-| champion | [0.08+) | 36 | 17-19 (0, 0) | +5.52 | 0.153 [-0.306, 0.613] | -0.0027 [-0.0133, 0.0078] (n=9) |  |
-| challenger | [0.04, 0.06) | 17 | 9-8 (0, 0) | -1.25 | -0.074 [-0.561, 0.413] | -0.0058 [-0.0295, 0.0180] (n=6) | small sample (n<30) |
-| challenger | [0.06, 0.08) | 8 | 3-4 (1, 0) | +1.55 | 0.222 [-1.500, 1.944] | -0.0181 [-0.0523, 0.0160] (n=3) | small sample (n<30) |
-| challenger | [0.08+) | 38 | 18-20 (0, 0) | +11.28 | 0.297 [-0.237, 0.831] | -0.0020 [-0.0096, 0.0055] (n=12) |  |
+| champion | Non-starred [0.04, 0.11) | 45 | 20-24 (1, 0) | -1.15 | -0.026 [-0.441, 0.389] | 0.0002 [-0.0121, 0.0125] (n=14) |  |
+| champion | ★ [0.11, 0.16) | 12 | 6-6 (0, 0) | +0.22 | 0.018 [-0.688, 0.724] | -0.0193 [-0.0201, -0.0185] (n=3) | small sample (n<30) |
+| champion | ★★ [0.16+) | 9 | 6-3 (0, 0) | +7.91 | 0.879 [-0.360, 2.119] | 0.0112 [-0.0009, 0.0234] (n=3) | small sample (n<30) |
+| challenger | Non-starred [0.04, 0.11) | 42 | 20-21 (1, 0) | +5.57 | 0.136 [-0.336, 0.607] | -0.0073 [-0.0164, 0.0018] (n=15) |  |
+| challenger | ★ [0.11, 0.16) | 14 | 5-9 (0, 0) | -2.32 | -0.166 [-0.879, 0.547] | -0.0128 [-0.0404, 0.0148] (n=3) | small sample (n<30) |
+| challenger | ★★ [0.16+) | 7 | 5-2 (0, 0) | +8.34 | 1.191 [-0.342, 2.725] | 0.0112 [-0.0009, 0.0234] (n=3) | small sample (n<30) |
 
-## Value tiers, wins over expected, and toss-ups (DESCRIPTIVE ONLY)
+## Value calls (★ and ★★), wins over expected, and toss-ups (DESCRIPTIVE ONLY)
 
-Descriptive only (Amendments 6 and 7). Nothing here changes the paper-bet rule, the checkpoint or the season-end verdict, which rests on CLV alone. Tiers label the official bets by their own edge (Amendment 7): Lean = [0.04, 0.11), ★ = [0.11, 0.16), ★★ = 0.16 and above. A Lean is still an official value call. **WOE** (wins over expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each call's side, over graded calls with pushes excluded. **Model expected** = the sum of the calls' edges: the WOE the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or below; accuracy follows the usual convention (ties excluded).
+Descriptive only (Amendments 6, 7 and 8). Nothing here changes the paper-bet rule, the checkpoint or the season-end verdict, which rests on the CLV of all official paper bets. A **value call** is an official paper bet with an edge of at least 0.11 (Amendment 8): ★ = [0.11, 0.16), ★★ = 0.16 and above. Every week from week 3 is counted this way. The remaining paper bets, [0.04, 0.11), are not value calls. **WOE** (wins over expected) = wins minus **Vegas expected**, the sum of the vig-free implied probability of each bet's side, over graded bets with pushes excluded. **Model expected** = the sum of the bets' edges: the WOE the model's own probabilities predicted. A toss-up is a game whose champion favorite is at 0.55 or below; accuracy follows the usual convention (ties excluded).
 
-| Value calls | Logged | W-L (push, pending) | n (graded, no push) | Won | Vegas expected | Model expected | WOE | WOE per call | Model expected per call |
+| Official paper bets | Logged | W-L (push, pending) | n (graded, no push) | Won | Vegas expected | Model expected | WOE | WOE per bet | Model expected per bet |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| All official value calls | 66 | 32-33 (1, 0) | 65 | 32 | 28.903 | 6.603 | +3.097 | +0.0477 | +0.1016 |
-| Lean edge [0.04, 0.11) | 45 | 20-24 (1, 0) | 44 | 20 | 20.179 | 3.231 | -0.179 | -0.0041 | +0.0734 |
-| ★ edge [0.11, 0.16) | 12 | 6-6 (0, 0) | 12 | 6 | 5.514 | 1.571 | +0.486 | +0.0405 | +0.1309 |
-| ★★ edge [0.16+) | 9 | 6-3 (0, 0) | 9 | 6 | 3.209 | 1.801 | +2.791 | +0.3101 | +0.2001 |
+| All paper bets (4-point rule) | 66 | 32-33 (1, 0) | 65 | 32 | 28.903 | 6.603 | +3.097 | +0.0477 | +0.1016 |
+| Non-starred [0.04, 0.11) | 45 | 20-24 (1, 0) | 44 | 20 | 20.179 | 3.231 | -0.179 | -0.0041 | +0.0734 |
+| Value calls (★ + ★★) | 21 | 12-9 (0, 0) | 21 | 12 | 8.723 | 3.372 | +3.277 | +0.1560 | +0.1606 |
+| ★ [0.11, 0.16) | 12 | 6-6 (0, 0) | 12 | 6 | 5.514 | 1.571 | +0.486 | +0.0405 | +0.1309 |
+| ★★ [0.16+) | 9 | 6-3 (0, 0) | 9 | 6 | 3.209 | 1.801 | +2.791 | +0.3101 | +0.2001 |
 
 | Champion picks | Logged | Accuracy [95% CI] |
 |---|---:|---|
